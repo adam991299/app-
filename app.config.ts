@@ -29,16 +29,17 @@ const config: ExpoConfig = {
       tinted: './assets/icon.png',
     },
     infoPlist: {
-      // Shown when the app asks to look up which contacts already play Närmast.
-      // Contacts are matched on-device only and are never uploaded or stored.
-      NSContactsUsageDescription:
-        'Närmast can check which of your contacts already play Närmast so you can add them as friends. Your contact list stays on your device and is never uploaded or stored on our servers.',
+      // NSContactsUsageDescription is set via the expo-contacts plugin config below,
+      // not duplicated here.
       ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
       'com.apple.developer.applesignin': ['Default'],
     },
-    associatedDomains: ['applinks:narmast.app'],
+    // Challenge links use the custom `narmast://` scheme (see lib/share.ts), which
+    // needs no extra config. If you later host narmast.app with a real
+    // apple-app-site-association file, add `associatedDomains: ['applinks:narmast.app']`
+    // here for Universal Links (https://narmast.app/... opening the app directly).
   },
   android: {
     package: BUNDLE_IDENTIFIER,
@@ -87,12 +88,6 @@ const config: ExpoConfig = {
     ],
     'expo-apple-authentication',
     'expo-secure-store',
-    [
-      'expo-font',
-      {
-        fonts: [],
-      },
-    ],
     'expo-system-ui',
     '@react-native-community/datetimepicker',
   ],

@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "seed": "tsx supabase/seed/seed.ts",
-    "build:ios": "eas build --platform ios --profile production",
-    "submit:ios": "eas submit --platform ios --latest"
+    "build:ios": "npx eas-cli@latest build --platform ios --profile production",
+    "submit:ios": "npx eas-cli@latest submit --platform ios --latest"
   },
   "dependencies": {
     "@expo/vector-icons": "15.1.1",
