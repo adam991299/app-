@@ -20,6 +20,22 @@ export type ProfilePatch = Partial<
   Pick<UserRow, 'display_name' | 'avatar_emoji' | 'avatar_color' | 'notification_time' | 'notifications_enabled' | 'timezone'>
 >;
 
+/**
+ * Demo-mode-only convenience so the paywall is actually explorable without a real
+ * RevenueCat project: flips the local demo profile's `is_premium` flag directly. This
+ * bypasses ProfilePatch on purpose — real Supabase mode has no equivalent (and
+ * couldn't: `is_premium` is deliberately excluded from ProfilePatch, and even the raw
+ * table's UPDATE grant excludes it — see 0008_users_column_privileges.sql. Only
+ * revenuecat-webhook can flip it for real.) A no-op when Supabase is configured.
+ */
+export async function simulatePremiumPurchaseInDemoMode(): Promise<UserRow | null> {
+  if (isSupabaseConfigured) return null;
+  const state = await updateDemoState((s) => {
+    if (s.profile) s.profile = { ...s.profile, is_premium: true, updated_at: new Date().toISOString() };
+  });
+  return state.profile;
+}
+
 export async function updateProfile(patch: ProfilePatch): Promise<UserRow> {
   if (!isSupabaseConfigured) {
     const state = await updateDemoState((s) => {

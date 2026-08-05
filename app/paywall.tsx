@@ -9,10 +9,15 @@ import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { AnalyticsEvent, track } from '@/lib/analytics';
-import { isRevenueCatConfigured } from '@/lib/env';
+import { isRevenueCatConfigured, isSupabaseConfigured } from '@/lib/env';
 import { haptics } from '@/lib/haptics';
 import { getCurrentOffering, purchasePackage, restorePurchases } from '@/lib/revenuecat';
+import { simulatePremiumPurchaseInDemoMode } from '@/lib/api/profile';
 import { useAuthStore } from '@/store/useAuthStore';
+
+/** True only in full demo mode (no Supabase, no RevenueCat) — lets the paywall be
+ * explored end-to-end without either backend configured. */
+const isFullDemoMode = !isSupabaseConfigured && !isRevenueCatConfigured;
 
 const BENEFITS = [
   { icon: ArchiveIcon, title: 'Full archive access', body: 'Every past question and puzzle, unlocked.' },
@@ -38,6 +43,19 @@ export default function PaywallScreen() {
   }, []);
 
   const handlePurchase = async () => {
+    if (isFullDemoMode) {
+      setPurchasing(true);
+      try {
+        await simulatePremiumPurchaseInDemoMode();
+        haptics.success();
+        await refreshProfile();
+        Alert.alert('Demo purchase simulated', "You're now Premium in this demo session — no real purchase was made.");
+        router.back();
+      } finally {
+        setPurchasing(false);
+      }
+      return;
+    }
     if (!isRevenueCatConfigured) {
       Alert.alert('Not configured', 'Add EXPO_PUBLIC_REVENUECAT_API_KEY_IOS and configure products in RevenueCat to enable purchases.');
       return;
@@ -140,6 +158,13 @@ export default function PaywallScreen() {
           })}
         </View>
 
+        {isFullDemoMode ? (
+          <Text variant="caption1" tone="tertiary" center style={styles.demoNote}>
+            Demo mode — "Continue" simulates a purchase locally. No payment is made, and
+            nothing is charged.
+          </Text>
+        ) : null}
+
         <Button onPress={handlePurchase} loading={purchasing} style={styles.continueButton}>
           Continue
         </Button>
@@ -187,7 +212,8 @@ const styles = StyleSheet.create({
   benefits: { width: '100%', gap: spacing.sm, marginBottom: spacing.lg },
   benefitRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   checkWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  packages: { flexDirection: 'row', gap: spacing.sm, width: '100%', marginBottom: spacing.lg },
+  packages: { flexDirection: 'row', gap: spacing.sm, width: '100%', marginBottom: spacing.sm },
+  demoNote: { marginBottom: spacing.sm, maxWidth: 280 },
   packageCard: {
     flex: 1,
     borderWidth: 2,
