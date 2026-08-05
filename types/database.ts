@@ -183,6 +183,8 @@ export interface Database {
         Args: { p_puzzle_id: string; p_answer: SequencePuzzleSolution; p_time_seconds: number };
         Returns: PuzzleAttemptResult;
       };
+      get_revealed_answer: { Args: { p_question_id: string }; Returns: number };
+      get_revealed_solution: { Args: { p_puzzle_id: string }; Returns: SequencePuzzleSolution };
     };
   };
 }

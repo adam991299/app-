@@ -270,6 +270,38 @@ export async function getArchive(isPremium: boolean): Promise<ArchiveDay[]> {
     });
 }
 
+/** Reveals the correct answer for a question the caller has already completed —
+ * safe to call from any results screen, including revisiting a past completed day. */
+export async function getRevealedAnswer(questionId: string): Promise<number> {
+  if (!isSupabaseConfigured) {
+    const question = demoQuestions.find((q) => q.id === questionId);
+    if (!question) throw new Error('Unknown question');
+    const state = await getDemoState();
+    if (!state.questionAttempts[questionId]?.completed_at) {
+      throw new Error('No completed attempt for this question');
+    }
+    return question.answer_number;
+  }
+  const { data, error } = await supabase.rpc('get_revealed_answer', { p_question_id: questionId });
+  if (error) throw error;
+  return data as unknown as number;
+}
+
+export async function getRevealedSolution(puzzleId: string): Promise<{ values: number[] }> {
+  if (!isSupabaseConfigured) {
+    const puzzle = demoPuzzles.find((p) => p.id === puzzleId);
+    if (!puzzle) throw new Error('Unknown puzzle');
+    const state = await getDemoState();
+    if (!state.puzzleAttempts[puzzleId]?.completed_at) {
+      throw new Error('No completed attempt for this puzzle');
+    }
+    return puzzle.solution;
+  }
+  const { data, error } = await supabase.rpc('get_revealed_solution', { p_puzzle_id: puzzleId });
+  if (error) throw error;
+  return data as unknown as { values: number[] };
+}
+
 function toPublicQuestion(q: DailyQuestionRow): PublicDailyQuestion {
   const { id, date, question_text, unit, category, source_note, created_at } = q;
   return { id, date, question_text, unit, category, source_note, created_at };
