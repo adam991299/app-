@@ -164,6 +164,16 @@ export async function getFriendActivityFeed(limit = 20): Promise<FriendActivityR
   return (data ?? []) as unknown as FriendActivityRow[];
 }
 
+export async function getFriendStreak(friendId: string): Promise<{ current: number; longest: number }> {
+  if (!isSupabaseConfigured) {
+    const friend = findDemoFriendById(friendId);
+    return { current: friend?.base_streak ?? 0, longest: (friend?.base_streak ?? 0) + 3 };
+  }
+  const { data, error } = await supabase.from('streaks').select('current_streak,longest_streak').eq('user_id', friendId).maybeSingle();
+  if (error) throw error;
+  return { current: data?.current_streak ?? 0, longest: data?.longest_streak ?? 0 };
+}
+
 export interface HeadToHeadDay {
   date: string;
   me: { questionSolved: boolean; questionGuesses: number; puzzleSolved: boolean; puzzleTimeSeconds: number };
