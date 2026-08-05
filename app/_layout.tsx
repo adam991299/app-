@@ -64,11 +64,13 @@ export default function RootLayout() {
             <Stack.Screen name="play/puzzle" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="results/question" options={{ animation: 'fade' }} />
             <Stack.Screen name="results/puzzle" options={{ animation: 'fade' }} />
+            <Stack.Screen name="results/day" options={{ animation: 'fade' }} />
             <Stack.Screen name="friends/add" options={{ presentation: 'modal' }} />
             <Stack.Screen name="friends/[id]" />
             <Stack.Screen name="archive" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="challenge" options={{ presentation: 'modal' }} />
           </Stack.Protected>
 
           <Stack.Screen name="+not-found" />

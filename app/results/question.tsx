@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { MotiView } from 'moti';
 import { ShareIcon, XIcon } from 'lucide-react-native';
@@ -8,10 +8,14 @@ import { Screen } from '@/components/ui/Screen';
 import { LoadingState } from '@/components/ui/StateViews';
 import { Text } from '@/components/ui/Text';
 import { GuessHistory } from '@/components/game/GuessHistory';
+import { ShareCard } from '@/components/share/ShareCard';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
+import { useShareCard } from '@/hooks/useShareCard';
+import { formatFriendlyDate } from '@/lib/dateUtils';
 import { getRevealedAnswer } from '@/lib/api/content';
 import { AnalyticsEvent, track } from '@/lib/analytics';
+import { questionShareGrid } from '@/lib/shareGrid';
 import { useGameStore } from '@/store/useGameStore';
 
 export default function QuestionResultsScreen() {
@@ -19,6 +23,7 @@ export default function QuestionResultsScreen() {
   const today = useGameStore((s) => s.today);
   const streak = useGameStore((s) => s.streak);
   const [answer, setAnswer] = useState<number | null>(null);
+  const { cardRef, sharing, triggerShare } = useShareCard();
 
   const question = today?.question;
   const attempt = today?.questionAttempt;
@@ -36,13 +41,11 @@ export default function QuestionResultsScreen() {
   }
 
   const solved = attempt.solved;
+  const grid = answer !== null ? questionShareGrid(attempt.guesses, answer) : ['⬜', '⬜', '⬜'];
 
   const handleShare = async () => {
     track(AnalyticsEvent.ShareSheetOpened, { source: 'question_results' });
-    const message = solved
-      ? `I solved today's Närmast question in ${attempt.guess_count}/3 guesses 🔥 ${streak?.current_streak ?? 0}-day streak. Can you beat me?`
-      : `Today's Närmast question stumped me — the answer was ${answer ?? '?'}. Think you can get it?`;
-    await Share.share({ message });
+    await triggerShare('Share your result');
   };
 
   return (
@@ -93,8 +96,23 @@ export default function QuestionResultsScreen() {
         </View>
       </ScrollView>
 
+      <View style={styles.offscreen} pointerEvents="none">
+        <ShareCard
+          ref={cardRef}
+          date={formatFriendlyDate()}
+          streak={streak?.current_streak ?? 0}
+          sections={[
+            {
+              label: "Today's Question",
+              grid,
+              detail: solved ? `Solved in ${attempt.guess_count}/3` : 'Not solved',
+            },
+          ]}
+        />
+      </View>
+
       <View style={styles.bottom}>
-        <Button icon={<ShareIcon size={18} color={colors.onAccent} />} onPress={handleShare}>
+        <Button icon={<ShareIcon size={18} color={colors.onAccent} />} onPress={handleShare} loading={sharing}>
           Share result
         </Button>
         <Button variant="tertiary" onPress={() => router.replace('/(tabs)')}>
@@ -128,4 +146,5 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md },
   stat: { alignItems: 'center', gap: 2 },
   bottom: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
+  offscreen: { position: 'absolute', top: -9999, left: -9999 },
 });

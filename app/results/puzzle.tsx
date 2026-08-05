@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { MotiView } from 'moti';
 import { ShareIcon, XIcon } from 'lucide-react-native';
@@ -8,11 +8,15 @@ import { Screen } from '@/components/ui/Screen';
 import { LoadingState } from '@/components/ui/StateViews';
 import { Text } from '@/components/ui/Text';
 import { SequenceTiles } from '@/components/game/SequenceTiles';
+import { ShareCard } from '@/components/share/ShareCard';
 import { formatStopwatch } from '@/hooks/useStopwatch';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
+import { useShareCard } from '@/hooks/useShareCard';
+import { formatFriendlyDate } from '@/lib/dateUtils';
 import { getRevealedSolution } from '@/lib/api/content';
 import { AnalyticsEvent, track } from '@/lib/analytics';
+import { puzzleShareGrid } from '@/lib/shareGrid';
 import { useGameStore } from '@/store/useGameStore';
 
 export default function PuzzleResultsScreen() {
@@ -20,6 +24,7 @@ export default function PuzzleResultsScreen() {
   const today = useGameStore((s) => s.today);
   const streak = useGameStore((s) => s.streak);
   const [solution, setSolution] = useState<number[] | null>(null);
+  const { cardRef, sharing, triggerShare } = useShareCard();
 
   const puzzle = today?.puzzle;
   const attempt = today?.puzzleAttempt;
@@ -39,13 +44,11 @@ export default function PuzzleResultsScreen() {
   const solved = attempt.solved;
   const displayedValue = solved ? (solution?.[0] ?? null) : (attempt.answer?.values?.[0] ?? null);
   const filledSequence = puzzle.puzzle_data.sequence.map((v) => (v === null ? displayedValue : v));
+  const grid = puzzleShareGrid(solved, attempt.time_seconds);
 
   const handleShare = async () => {
     track(AnalyticsEvent.ShareSheetOpened, { source: 'puzzle_results' });
-    const message = solved
-      ? `I solved today's Närmast puzzle in ${formatStopwatch(attempt.time_seconds)} 🧩 ${streak?.current_streak ?? 0}-day streak. Beat my time?`
-      : `Today's Närmast puzzle got me. Think you can crack it?`;
-    await Share.share({ message });
+    await triggerShare('Share your result');
   };
 
   return (
@@ -90,8 +93,23 @@ export default function PuzzleResultsScreen() {
         </View>
       </ScrollView>
 
+      <View style={styles.offscreen} pointerEvents="none">
+        <ShareCard
+          ref={cardRef}
+          date={formatFriendlyDate()}
+          streak={streak?.current_streak ?? 0}
+          sections={[
+            {
+              label: "Today's Puzzle",
+              grid,
+              detail: solved ? `Solved in ${formatStopwatch(attempt.time_seconds)}` : 'Not solved',
+            },
+          ]}
+        />
+      </View>
+
       <View style={styles.bottom}>
-        <Button icon={<ShareIcon size={18} color={colors.onAccent} />} onPress={handleShare}>
+        <Button icon={<ShareIcon size={18} color={colors.onAccent} />} onPress={handleShare} loading={sharing}>
           Share result
         </Button>
         <Button variant="tertiary" onPress={() => router.replace('/(tabs)')}>
@@ -124,4 +142,5 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md },
   stat: { alignItems: 'center', gap: 2 },
   bottom: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
+  offscreen: { position: 'absolute', top: -9999, left: -9999 },
 });
