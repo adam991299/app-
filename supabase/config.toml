@@ -1,0 +1,13 @@
+# Supabase CLI project config. Run `supabase init` once to generate a project_id, or
+# link to an existing project with `supabase link --project-ref <ref>`.
+# See README.md for the full local-dev + deploy workflow.
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+
+[functions.generate-daily-content]
+verify_jwt = false

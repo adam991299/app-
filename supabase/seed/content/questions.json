@@ -1,0 +1,242 @@
+[
+  {
+    "date": "2026-08-05",
+    "question_text": "What year was IKEA founded?",
+    "answer_number": 1943,
+    "unit": null,
+    "category": "history",
+    "source_note": "Founded by Ingvar Kamprad in Älmhult, Sweden."
+  },
+  {
+    "date": "2026-08-06",
+    "question_text": "What year did the Berlin Wall fall?",
+    "answer_number": 1989,
+    "unit": null,
+    "category": "history",
+    "source_note": "The wall came down on November 9, 1989."
+  },
+  {
+    "date": "2026-08-07",
+    "question_text": "In what year was the Eiffel Tower completed?",
+    "answer_number": 1889,
+    "unit": null,
+    "category": "history",
+    "source_note": "Built for the 1889 World's Fair."
+  },
+  {
+    "date": "2026-08-08",
+    "question_text": "What year did the Titanic sink?",
+    "answer_number": 1912,
+    "unit": null,
+    "category": "history",
+    "source_note": "Sank on its maiden voyage, April 15, 1912."
+  },
+  {
+    "date": "2026-08-09",
+    "question_text": "What year was the first iPhone released?",
+    "answer_number": 2007,
+    "unit": null,
+    "category": "history",
+    "source_note": "Announced by Steve Jobs in January, released in June 2007."
+  },
+  {
+    "date": "2026-08-10",
+    "question_text": "In what year did World War II end?",
+    "answer_number": 1945,
+    "unit": null,
+    "category": "history",
+    "source_note": "Ended with Japan's surrender in September 1945."
+  },
+  {
+    "date": "2026-08-11",
+    "question_text": "What year was the United Nations founded?",
+    "answer_number": 1945,
+    "unit": null,
+    "category": "history",
+    "source_note": "Founded after WWII to promote international cooperation."
+  },
+  {
+    "date": "2026-08-12",
+    "question_text": "What year did Christopher Columbus first reach the Americas?",
+    "answer_number": 1492,
+    "unit": null,
+    "category": "history",
+    "source_note": "He landed in the Bahamas in October 1492."
+  },
+  {
+    "date": "2026-08-13",
+    "question_text": "How many bones are in the adult human body?",
+    "answer_number": 206,
+    "unit": null,
+    "category": "nature",
+    "source_note": "Babies are born with about 300, many fuse together with age."
+  },
+  {
+    "date": "2026-08-14",
+    "question_text": "What is the average gestation period of an African elephant, in days?",
+    "answer_number": 660,
+    "unit": null,
+    "category": "nature",
+    "source_note": "Roughly 22 months — the longest of any land mammal."
+  },
+  {
+    "date": "2026-08-15",
+    "question_text": "How many hearts does an octopus have?",
+    "answer_number": 3,
+    "unit": null,
+    "category": "nature",
+    "source_note": "Two pump blood to the gills, one to the rest of the body."
+  },
+  {
+    "date": "2026-08-16",
+    "question_text": "What is the top speed of a peregrine falcon during a hunting dive, in km/h?",
+    "answer_number": 390,
+    "unit": null,
+    "category": "nature",
+    "source_note": "The fastest animal on Earth in a diving stoop."
+  },
+  {
+    "date": "2026-08-17",
+    "question_text": "How many species of shark are there, roughly?",
+    "answer_number": 500,
+    "unit": null,
+    "category": "nature",
+    "source_note": "Marine biologists estimate over 500 known species."
+  },
+  {
+    "date": "2026-08-18",
+    "question_text": "How many years can a giant tortoise live, roughly, at maximum recorded age?",
+    "answer_number": 190,
+    "unit": null,
+    "category": "nature",
+    "source_note": "Jonathan the tortoise is verified at over 190 years old."
+  },
+  {
+    "date": "2026-08-19",
+    "question_text": "What percentage of Earth's water is fresh water, roughly?",
+    "answer_number": 3,
+    "unit": "%",
+    "category": "nature",
+    "source_note": "About 2.5–3% of all water on Earth is fresh water."
+  },
+  {
+    "date": "2026-08-20",
+    "question_text": "How many teeth does an adult human typically have?",
+    "answer_number": 32,
+    "unit": null,
+    "category": "nature",
+    "source_note": "Including all four wisdom teeth."
+  },
+  {
+    "date": "2026-08-21",
+    "question_text": "How many players are on a soccer team on the field at once?",
+    "answer_number": 11,
+    "unit": null,
+    "category": "sports",
+    "source_note": "Eleven players per side, including the goalkeeper."
+  },
+  {
+    "date": "2026-08-22",
+    "question_text": "In what year did the first modern Olympic Games take place?",
+    "answer_number": 1896,
+    "unit": null,
+    "category": "sports",
+    "source_note": "Held in Athens, Greece."
+  },
+  {
+    "date": "2026-08-23",
+    "question_text": "How many Grand Slam singles titles did Roger Federer win in his career?",
+    "answer_number": 20,
+    "unit": null,
+    "category": "sports",
+    "source_note": "Across the Australian Open, French Open, Wimbledon, and US Open."
+  },
+  {
+    "date": "2026-08-24",
+    "question_text": "What is the length of a marathon, in kilometers (rounded)?",
+    "answer_number": 42,
+    "unit": "km",
+    "category": "sports",
+    "source_note": "The official distance is 42.195 km."
+  },
+  {
+    "date": "2026-08-25",
+    "question_text": "How many players are on a basketball team on the court at once, per side?",
+    "answer_number": 5,
+    "unit": null,
+    "category": "sports",
+    "source_note": "Five players per team on the court."
+  },
+  {
+    "date": "2026-08-26",
+    "question_text": "How many rings are on the Olympic flag?",
+    "answer_number": 5,
+    "unit": null,
+    "category": "sports",
+    "source_note": "Representing five inhabited continents."
+  },
+  {
+    "date": "2026-08-27",
+    "question_text": "How many minutes are in a standard FIFA soccer match, excluding stoppage time?",
+    "answer_number": 90,
+    "unit": null,
+    "category": "sports",
+    "source_note": "Two 45-minute halves."
+  },
+  {
+    "date": "2026-08-28",
+    "question_text": "What year did the first Harry Potter book get published?",
+    "answer_number": 1997,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "\"Harry Potter and the Philosopher's Stone\" published in the UK."
+  },
+  {
+    "date": "2026-08-29",
+    "question_text": "How many Oscars did \"Titanic\" (1997) win in total?",
+    "answer_number": 11,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "Tied the record for most Oscars won by a single film."
+  },
+  {
+    "date": "2026-08-30",
+    "question_text": "What year was the first \"Star Wars\" film released?",
+    "answer_number": 1977,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "Later retitled \"Episode IV – A New Hope.\""
+  },
+  {
+    "date": "2026-08-31",
+    "question_text": "How many seasons did \"Friends\" run for?",
+    "answer_number": 10,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "The show aired from 1994 to 2004."
+  },
+  {
+    "date": "2026-09-01",
+    "question_text": "What year did Nintendo release the original Game Boy?",
+    "answer_number": 1989,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "Released in Japan in April 1989."
+  },
+  {
+    "date": "2026-09-02",
+    "question_text": "How many Grammy Awards has Beyoncé won, as of 2024?",
+    "answer_number": 32,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "The most Grammy wins of any artist in history."
+  },
+  {
+    "date": "2026-09-03",
+    "question_text": "What year did the first \"Toy Story\" film release?",
+    "answer_number": 1995,
+    "unit": null,
+    "category": "pop-culture",
+    "source_note": "The first fully computer-animated feature film."
+  }
+]
