@@ -11,3 +11,6 @@ port = 54322
 
 [functions.generate-daily-content]
 verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false

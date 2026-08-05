@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { deleteAccount as apiDeleteAccount, getSession, onAuthStateChange, signInWithApple, signOut as apiSignOut } from '@/lib/api/auth';
-import { configurePurchases, logOutPurchases } from '@/lib/revenuecat';
+import { addPremiumStatusListener, configurePurchases, logOutPurchases } from '@/lib/revenuecat';
 import { getMyProfile, updateProfile, type ProfilePatch } from '@/lib/api/profile';
 import { identifyUser, resetAnalyticsIdentity } from '@/lib/analytics';
 import { isSupabaseConfigured } from '@/lib/env';
@@ -23,6 +23,7 @@ interface AuthState {
 }
 
 let subscribed = false;
+let premiumListenerAttached = false;
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   status: 'loading',
@@ -79,6 +80,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         profile,
         needsProfileSetup: profile.display_name === 'Player',
       });
+
+      if (!premiumListenerAttached) {
+        premiumListenerAttached = true;
+        // RevenueCat's local cache updates instantly on purchase/restore; the DB's
+        // is_premium (the actual gate — see 0008_users_column_privileges.sql) catches
+        // up shortly after via the revenuecat-webhook Edge Function. Nudge a re-fetch
+        // so the UI doesn't feel stuck waiting on the webhook round trip.
+        addPremiumStatusListener(() => {
+          setTimeout(() => get().refreshProfile(), 1500);
+        });
+      }
     } catch {
       set({ status: 'signedOut', profile: null });
     }

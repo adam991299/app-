@@ -8,6 +8,8 @@ import { TextField } from '@/components/ui/TextField';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { haptics } from '@/lib/haptics';
+import { requestNotificationPermission, scheduleDailyReminder } from '@/lib/notifications';
+import { DEFAULT_NOTIFICATION_HOUR, DEFAULT_NOTIFICATION_MINUTE } from '@/constants/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
 
 const EMOJI_OPTIONS = ['🙂', '🦊', '🐻', '🦋', '🐢', '🦉', '🐙', '🦁', '🐝', '🦈', '🐨', '🦄'];
@@ -31,6 +33,10 @@ export default function ProfileSetupScreen() {
     try {
       await saveProfileSetup({ display_name: name.trim().slice(0, 24), avatar_emoji: emoji, avatar_color: color });
       haptics.success();
+      // Soft prompt right after setup, the natural "you're in" moment — never blocks
+      // finishing onboarding if the user declines.
+      const granted = await requestNotificationPermission();
+      if (granted) await scheduleDailyReminder(DEFAULT_NOTIFICATION_HOUR, DEFAULT_NOTIFICATION_MINUTE);
     } catch (err: any) {
       Alert.alert('Could not save', err?.message ?? 'Please try again.');
     } finally {

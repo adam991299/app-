@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
+import Purchases, { type CustomerInfo, type PurchasesOffering, type PurchasesPackage } from 'react-native-purchases';
 import { env, isRevenueCatConfigured } from './env';
 
 /** The RevenueCat entitlement identifier that gates the archive + extended stats. */
@@ -39,7 +39,23 @@ export async function restorePurchases(): Promise<CustomerInfo | null> {
   return Purchases.restorePurchases();
 }
 
+export async function purchasePackage(pkg: PurchasesPackage): Promise<CustomerInfo> {
+  const { customerInfo } = await Purchases.purchasePackage(pkg);
+  return customerInfo;
+}
+
 export async function logOutPurchases(): Promise<void> {
   if (!isRevenueCatConfigured || !configured) return;
   await Purchases.logOut();
+}
+
+/** Fires whenever RevenueCat's local entitlement cache changes (e.g. right after a
+ * purchase, or when a background receipt refresh completes) — used to nudge the app
+ * into re-fetching the Supabase profile sooner than waiting on the webhook alone. The
+ * DB's `is_premium` (updated by revenuecat-webhook) stays the actual source of truth
+ * for gating; this just makes the UI feel instant. */
+export function addPremiumStatusListener(callback: (info: CustomerInfo) => void): () => void {
+  if (!isRevenueCatConfigured) return () => {};
+  Purchases.addCustomerInfoUpdateListener(callback);
+  return () => Purchases.removeCustomerInfoUpdateListener(callback);
 }

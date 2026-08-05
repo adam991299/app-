@@ -94,6 +94,7 @@ const config: ExpoConfig = {
       },
     ],
     'expo-system-ui',
+    '@react-native-community/datetimepicker',
   ],
   extra: {
     eas: {
