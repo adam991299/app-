@@ -1,0 +1,42 @@
+{
+  "sourceLanguage": "sv",
+  "version": "1.0",
+  "strings": {
+    "CFBundleDisplayName": {
+      "comment": "App name under the icon",
+      "extractionState": "manual",
+      "localizations": {
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stegkamp"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stegkamp"
+          }
+        }
+      }
+    },
+    "NSHealthShareUsageDescription": {
+      "comment": "Health read permission",
+      "extractionState": "manual",
+      "localizations": {
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stegkamp läser dina steg och din gångdistans för att visa dina framsteg och räkna ut tävlingarna du är med i. Stegdata används aldrig för annonser."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stegkamp reads your steps and walking distance to show your progress and score the competitions you're in. Step data is never used for ads."
+          }
+        }
+      }
+    }
+  }
+}

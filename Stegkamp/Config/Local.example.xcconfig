@@ -1,0 +1,7 @@
+// Dina personliga inställningar. Filen Local.xcconfig checkas aldrig in.
+
+// Ditt Team ID: developer.apple.com → Account → Membership details → Team ID.
+DEVELOPMENT_TEAM =
+
+// Avkommentera och ändra om bundle-id:t redan är upptaget:
+// STEGKAMP_BUNDLE_ID = se.dittnamn.stegkamp

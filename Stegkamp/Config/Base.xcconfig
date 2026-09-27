@@ -1,0 +1,21 @@
+// Gemensamma inställningar för Stegkamp.
+// Personliga värden (ditt Team ID, ev. eget bundle-id) läggs i Local.xcconfig,
+// som skapas av scripts/bootstrap.sh och aldrig checkas in.
+
+// Namnet under ikonen på hemskärmen.
+APP_DISPLAY_NAME = Stegkamp
+
+// Måste vara unikt på App Store. Byt i Local.xcconfig om det redan är taget.
+STEGKAMP_BUNDLE_ID = se.stegkamp.app
+
+// Ditt Apple Developer Team ID (10 tecken). Sätts i Local.xcconfig.
+DEVELOPMENT_TEAM =
+
+// Domänen för inbjudningslänkar (https://<domän>/j/<kod>). Firebase Hosting ger stegkamp.web.app
+// om projektet heter "stegkamp"; byt till din egen domän här när du har en.
+UNIVERSAL_LINK_DOMAIN = stegkamp.web.app
+
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+#include? "Local.xcconfig"

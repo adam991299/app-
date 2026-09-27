@@ -1,0 +1,27 @@
+# Xcode (projektet genereras av XcodeGen)
+*.xcodeproj
+*.xcworkspace
+!Packages/**/*.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+.build/
+.swiftpm/
+*.xcresult
+
+# Lokala inställningar och hemligheter
+Config/Local.xcconfig
+Stegkamp/Resources/GoogleService-Info.plist
+*.p8
+
+# Firebase
+firebase/.firebase/
+firebase/.firebaserc
+firebase/functions/node_modules/
+firebase/functions/lib/
+firebase/*-debug.log
+firebase/functions/*-debug.log
+
+# Genereras av XcodeGen från project.yml
+Stegkamp/Resources/Info.plist
+Stegkamp/Resources/Stegkamp.entitlements
