@@ -1,0 +1,57 @@
+/* Design tokens from JARVIS_SPEC.md §9.1. Every colour in the app comes from here. */
+:root {
+  color-scheme: dark;
+  --color-background: #05070b;
+  --color-surface: #0d1117;
+  --color-surface-raised: #141a23;
+  --color-divider: rgba(255, 255, 255, 0.06);
+  --color-text: #f2f4f8;
+  --color-text-secondary: #8a93a3;
+  --color-glow-from: #4ce0ff;
+  --color-glow-to: #7b5cff;
+  --color-gain: #30d158;
+  --color-loss: #ff453a;
+  --color-warning: #ffb340;
+  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter",
+    system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-system);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px max(24px, env(safe-area-inset-left));
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 41px;
+  font-weight: 700;
+}
+
+p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  color: var(--color-text-secondary);
+}

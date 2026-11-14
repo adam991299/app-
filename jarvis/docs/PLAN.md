@@ -1,0 +1,145 @@
+# Plan — Jarvis the Trader
+
+Status: ✅ klar och verifierad · 🔨 pågår · ⏳ väntar på Adam · ⬜ ej påbörjad
+
+Acceptanskraven är ordagrant från `docs/spec/13-byggordning.md`. En fas bockas av först när
+hela arbetscykeln (§00.2) är genomförd.
+
+## Beroendekarta
+
+```
+Fas 0 ──► Fas 0.5 (tunn version, pappershandlar ≥ 10 handelsdagar) ──────────────┐
+  │                                                                               │
+  ├─► Delade gränssnitt (definieras först i Fas 0.5): API-kontrakt,               │
+  │   databasschema, design tokens, BrokerAdapter                                 │
+  │        │                                                                      │
+  │        ├─► Fas 1 Data ──► Fas 2 Research-labb ──► Fas 3 Strategier            │
+  │        │        │                    │                  │                     │
+  │        │        ├─► Fas 4 Nyheter ───┤                  │                     │
+  │        │        ├─► Fas 4.2 Politiker┤                  │                     │
+  │        │        │                    └─► Fas 4.5 Learning Loop                │
+  │        ├─► Fas 5 Risk och exekvering (bygger vidare på 0.5) ──► Fas 6.2       │
+  │        ├─► Fas 6 Appen (mot API-kontraktet) ──► Fas 6.2 ──► Fas 6.5           │
+  │        ├─► economics/ (§1.5) — oberoende, visas i Fas 6                       │
+  │        └─► Fas 7 Drift och säkerhet (VPS krävs redan för Fas 0.5)             │
+  │                                                                               ▼
+  └──────────────────────────────► Fas 8 Papper ≥ 60 handelsdagar ► Fas 9 Live ► Fas 10
+```
+
+**Byggs parallellt** (egna git worktrees, efter att de delade gränssnitten finns):
+nyhetsmotorn (4), politikersignaler (4.2), appens design och vyer (6), research-labbet (2),
+ekonomimodulen. **Byggs aldrig i hast:** `risk/`, `execution/`, `broker/`, `economics/`.
+
+**Kan inte snabbas upp:** Fas 0.5 (10 handelsdagar) och Fas 8 (60 handelsdagar) mäts i
+kalendertid och kräver en VPS som är igång dygnet runt. Allt annat byggs under tiden.
+
+## Faser
+
+### 🔨 Fas 0 – Plan och skelett
+Repo-struktur, Docker Compose, CI (lint, typkontroll, tester), `README.md` på svenska,
+`docs/ASSUMPTIONS.md`, och config-system med validering.
+**Acceptanskrav:** `docker compose up` startar alla tomma tjänster, och CI är grön.
+
+- [x] Specen uppdelad ordagrant i `docs/spec/` (kontrollerad byte för byte mot originalet)
+- [x] `CLAUDE.md`, `PLAN.md`, `PROGRESS.md`, `ASSUMPTIONS.md`, `DECISIONS.md`
+- [x] Config-system med validering (`backend/src/jarvis/config/`, `config/default.yaml`)
+- [x] Tjänsteskelett med hälsokontroll och JSON-loggar (`backend/src/jarvis/service/`)
+- [x] Webbskelett (Next.js, TypeScript strict, design tokens från §9.1)
+- [x] Docker Compose med alla tjänster i §2; bara Caddy publicerar en port (443)
+- [x] CI: backend (ruff, mypy strict, pytest), webb (eslint, tsc, build), compose-röktest
+- [x] README på svenska
+- [ ] Granskning av separat agent, fynd åtgärdade
+- [ ] Acceptanskravet verifierat i CI (se `PROGRESS.md`)
+
+### ⏳ Fas 0.5 – Den tunna versionen hela vägen
+Amerikanska aktier, en strategi, IBKR Paper, risk-engine med nödstopp, avstämning, test- och
+live-miljöer (§11), och en enkel men redan snygg hemskärm enligt §9.1.
+**Acceptanskrav:** Körs automatiskt i minst 10 handelsdagar utan fel eller manuella ingrepp
+(utöver 2FA). Varje affär går att följa från signal till fyllnad. Kill switch testad.
+Hemskärmen granskad med skärmdumpar.
+
+Kan byggas utan Adam (mot `SimBroker`): delade gränssnitt, databasschema, `BrokerAdapter` +
+`SimBroker`, risk-engine med nödstopp, order-tillståndsmaskin, avstämning, trendföljnings-
+strategi, hemskärm. **Kräver Adam:** IBKR Paper-inloggning, VPS och domän (för de 10
+handelsdagarna).
+
+### ⬜ Fas 1 – Data
+Kalendrar, universum, historik- och realtidsdata från IBKR Paper, datakvalitetskontroller.
+**Acceptanskrav:** Historik för minst 200 instrument över alla tillgångsslag sparad och
+kvalitetskontrollerad.
+
+### ⬜ Fas 2 – Research-labb
+Kostnadsmodell, vektoriserad och händelsedriven backtester, walk-forward, holdout, Deflated
+Sharpe, Monte Carlo och lookahead-test.
+**Acceptanskrav:** En känd enkel strategi ger samma resultat i båda backtestrarna (inom
+tolerans), och lookahead-testet fångar ett avsiktligt inplanterat fel.
+
+### ⬜ Fas 3 – Strategibibliotek och regimer
+Alla strategier i §6.1, regimklassificering och livscykel.
+**Acceptanskrav:** Rapport på svenska över vilka kandidater som klarar valideringen. Det är
+helt okej om ingen klarar den. Då säger rapporten det ärligt och Jarvis handlar inte.
+
+### ⬜ Fas 4 – Nyhetsmotor
+Källplugins, avduplicering, Claude-analys med JSON-validering, features och kostnadstak.
+**Acceptanskrav:** Nyheter strömmar in, kopplas rätt till instrument (stickprov på 50 st
+≥ 90 % rätt) och lagras med mottagningstid.
+
+### ⬜ Fas 4.2 – Politikersignaler (§5.4)
+Parsers för Senatens och representanthusets rapporter, utskottsdata, features och backtest
+från publiceringsdatum.
+**Acceptanskrav:** Historik sedan 2012 inläst och stickprovskontrollerad mot original-PDF:er
+(≥ 95 % korrekta). Testet som stoppar användning av affärsdatum som signaldatum finns och
+fungerar. En ärlig rapport på svenska visar om signalen tillför något efter kostnader.
+
+### ⬜ Fas 4.5 – Learning Loop (§5.5)
+Affärsjournal, efteranalys, märkning av nyhetsutfall, modellregister, champion/challenger med
+skuggkörning, driftdetektering, research-agent i sandlåda, och mätvärden.
+**Acceptanskrav:** En medvetet sämre challenger ska förlora och aldrig befordras. En medvetet
+bättre challenger (på syntetisk data med en inplanterad edge) ska vinna. Återställning till
+förra versionen fungerar. Research-agenten kan inte röra risk- eller live-kod (testas).
+
+### ⬜ Fas 5 – Risk och exekvering mot papperskonto
+Risk-engine, order-tillståndsmaskin, bracket-order, avstämning och återhämtning.
+**Acceptanskrav:** Kaostester: döda tjänster mitt i en order, koppla bort gatewayn, skicka
+dubbla signaler. Inga dubbla order, inga positioner utan stop, och läget stämmer alltid mot
+mäklaren.
+
+### ⬜ Fas 6 – Appen
+Alla vyer i §9 och PWA med notiser.
+**Acceptanskrav:** Lighthouse ≥ 95 i Performance, Accessibility och Best Practices på mobil.
+Mörkt läge (standard) och ljust läge granskade med skärmdumpar mot §9.1. Fungerar från
+iPhone-hemskärmen. Noll kända buggar.
+
+### ⬜ Fas 6.2 – Samtidighet och möjlighetsnotiser (§6.4.1, §9.2.2)
+Portföljhanterare, delpositioner, gränser för samtidighet, de tre lägena per motor,
+möjlighetskort med nedräkning och priskontroll.
+**Acceptanskrav:** Simulering: 5 daytrades, 10 swingpositioner och 2 krypto- och
+råvarupositioner hanteras samtidigt utan motstridiga order och utan överskriden budget. En
+kraschad strategi påverkar inte de andra. Ett förslag som godkänns efter att priset rört sig
+kräver ny bekräftelse. Ett utgånget förslag kan inte godkännas.
+
+### ⬜ Fas 6.5 – "Fråga Jarvis" (§9.2.1)
+Chatt med tool use, rika kort, röst in och ut, säkerhetsnivåer, och skydd mot prompt injection.
+**Acceptanskrav:** 30 testfrågor (förklaringar, skanningar, analyser och åtgärder) besvaras
+korrekt utifrån riktig data. Röstorder på nivå 3 kräver alltid bekräftelse. Försök att via
+chatt eller röst slå på live-handel, höja riskgränser eller stänga av kill switch misslyckas
+(testas automatiskt). En nyhet med en inplanterad instruktion ("sälj allt") leder inte till
+någon åtgärd. Svarstiden i röstläge mäts.
+
+### ⬜ Fas 7 – Drift och säkerhet
+Deploy till VPS, Caddy, Cloudflare Access/Tailscale, passkeys, övervakning, backup och watchdog.
+**Acceptanskrav:** Säkerhetschecklista genomgången. Återställning från backup testad.
+
+### ⬜ Fas 8 – Pappershandel i minst 60 handelsdagar
+Jarvis körs helt automatiskt i papper. Veckorapporter. Avvikelser mot backtest och mot index
+analyseras.
+**Acceptanskrav:** Adam får en slutrapport: vad som fungerade, vad som inte gjorde det, och om
+systemet uppfyller kraven för LIVE-LITEN enligt §6.4. Rekommendationen ska vara ärlig även om
+svaret är nej.
+
+### ⬜ Fas 9 – Live (bara när Adam aktivt väljer det)
+Enligt §9.4.
+
+### ⬜ Fas 10 – Utvärdering efter 6 och 12 månader live
+En ärlig rapport om Jarvis jämfört med index efter alla kostnader och skatt, med statistisk
+osäkerhet (konfidensintervall), och en tydlig rekommendation. Följer stoppreglerna i §16.

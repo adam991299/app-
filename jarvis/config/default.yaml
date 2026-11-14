@@ -1,0 +1,92 @@
+# Jarvis standardinställningar. Alla värden kommer från JARVIS_SPEC.md.
+# Procent anges i procentenheter (0.75 betyder 0,75 %).
+# Ändra inte här i drift: lägg egna värden i en separat fil och peka ut den med
+# JARVIS_CONFIG_OVERRIDE. Ogiltiga värden gör att Jarvis vägrar starta.
+# Handelsläge (papper/live) finns medvetet inte här – live slås bara på i appen.
+app:
+  locale: sv-SE
+  display_timezone: Europe/Stockholm
+night_mode:
+  enabled: true
+  start: '23:00:00'
+  end: '07:00:00'
+markets:
+  us_equities: true
+  nordic_equities: false
+  etfs: false
+  commodities: false
+  crypto: false
+  futures: false
+  us_extended_hours: false
+universe:
+  min_adv_nordics_msek: 5.0
+  min_adv_us_musd: 20.0
+risk:
+  per_trade:
+    max_risk_pct: 0.75
+    max_kelly_fraction: 0.25
+  portfolio:
+    max_position_pct: 10.0
+    max_position_crypto_pct: 5.0
+    max_position_small_cap_pct: 5.0
+    max_sector_pct: 25.0
+    max_crypto_total_pct: 15.0
+    max_commodities_total_pct: 20.0
+    max_gross_exposure_pct: 100.0
+    min_cash_reserve_pct: 5.0
+    long_only: true
+  circuit_breakers:
+    daily_loss_pct: 2.0
+    weekly_loss_pct: 4.0
+    kill_switch_drawdown_pct: 10.0
+    max_clock_drift_seconds: 1.0
+  turnover:
+    max_annual_turnover_multiple: 10.0
+    min_edge_to_cost_ratio: 2.0
+  gap:
+    single_stock_gap_pct: 25.0
+    crypto_gap_pct: 40.0
+    max_gap_loss_pct: 3.0
+  technical_max:
+    single_stock_pct_of_budget: 25.0
+    crypto_total_pct: 40.0
+    leverage_allowed: false
+  concurrency:
+    max_open_positions: 25
+    max_concurrent_daytrades: 5
+  daytrading:
+    max_daily_loss_pct: 1.0
+    pause_after_consecutive_losses: 3
+validation:
+  min_oos_trades: 100
+  min_deflated_sharpe_probability: 0.95
+  max_drawdown_pct: 20.0
+  min_profit_factor: 1.3
+  min_positive_walk_forward_windows_pct: 60.0
+  holdout_pct: 20.0
+  max_free_parameters: 5
+lifecycle:
+  paper_min_trading_days: 60
+  paper_min_trades: 50
+  slow_strategy_paper_min_months: 3
+  paper_slippage_multiplier: 2.0
+opportunities:
+  max_per_day: 5
+  reprice_daytrade_pct: 0.5
+  reprice_swing_pct: 1.5
+tax:
+  model: isk
+  tax_year: null
+  isk_tax_free_level_sek: null
+  isk_schablon_tax_pct: null
+economics:
+  break_even_warning_pct: 3.0
+  min_living_buffer_months: 12
+check_in:
+  interval_days: 7
+  halve_risk_after_days: 3
+  wind_down_after_days: 7
+project_stop_rules:
+  evaluation_months: 12
+  max_total_live_drawdown_pct: 20.0
+  min_months_per_capital_step: 3

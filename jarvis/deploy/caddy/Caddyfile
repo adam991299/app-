@@ -1,0 +1,11 @@
+# HTTPS entry point (spec §2, §10). With JARVIS_DOMAIN=localhost Caddy uses its own
+# local certificate; with a real domain it fetches one automatically.
+{$JARVIS_DOMAIN} {
+	encode zstd gzip
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

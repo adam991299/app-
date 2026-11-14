@@ -1,0 +1,156 @@
+# Jarvis the Trader — all services (spec §2). Start with: docker compose up -d --wait
+# Secrets come from .env (create it with scripts/init-env.sh). Only Caddy publishes a port.
+
+x-backend: &backend
+  image: jarvis-backend:local
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  restart: unless-stopped
+  networks: [internal]
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  healthcheck:
+    test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
+    interval: 10s
+    timeout: 5s
+    retries: 6
+    start_period: 10s
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_DB: jarvis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?kör scripts/init-env.sh först}
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U jarvis -d jarvis]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    networks: [internal]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    <<: *backend
+    command: [--name, api]
+  broker-service:
+    <<: *backend
+    command: [--name, broker-service]
+  execution-engine:
+    <<: *backend
+    command: [--name, execution-engine]
+  risk-engine:
+    <<: *backend
+    command: [--name, risk-engine]
+  market-data-service:
+    <<: *backend
+    command: [--name, market-data-service]
+  strategy-engine:
+    <<: *backend
+    command: [--name, strategy-engine]
+  research-lab:
+    <<: *backend
+    command: [--name, research-lab]
+  news-service:
+    <<: *backend
+    command: [--name, news-service]
+  learning-service:
+    <<: *backend
+    command: [--name, learning-service]
+  scheduler:
+    <<: *backend
+    command: [--name, scheduler]
+  watchdog:
+    <<: *backend
+    command: [--name, watchdog]
+  notifier:
+    <<: *backend
+    command: [--name, notifier]
+  backup:
+    <<: *backend
+    command: [--name, backup]
+
+  web:
+    image: jarvis-web:local
+    build: ./web
+    restart: unless-stopped
+    networks: [internal]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    networks: [internal]
+    ports: ["443:443"]
+    environment:
+      JARVIS_DOMAIN: ${JARVIS_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?kör scripts/init-env.sh först}
+    volumes: [grafana-data:/var/lib/grafana]
+
+  # IB Gateway needs Adam's IBKR Paper login, so it only starts with:
+  #   docker compose --profile broker up -d
+  # Its API port is never published outside the internal network (spec §10).
+  ib-gateway:
+    profiles: [broker]
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      TWS_USERID: ${IBKR_PAPER_USERNAME:-}
+      TWS_PASSWORD: ${IBKR_PAPER_PASSWORD:-}
+      TRADING_MODE: paper
+      TIME_ZONE: Europe/Stockholm
+
+networks:
+  internal:
+
+volumes:
+  db-data:
+  redis-data:
+  caddy-data:
+  prometheus-data:
+  grafana-data:
