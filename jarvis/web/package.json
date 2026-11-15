@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test e2e/contract.test.mjs",
+    "e2e": "node e2e/check.mjs"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.107.1",
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1"

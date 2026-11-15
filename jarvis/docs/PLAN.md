@@ -73,7 +73,11 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
 - [x] `execution/`: order-tillståndsmaskin, journal före avsändning, idempotens vid omstart,
       återhämtning, avstämning, larm, höjning av stopp (D15); 100 % täckning
 - [ ] Trendföljningsstrategi på dagsbarer (amerikanska aktier)
-- [ ] Hemskärm enligt §9.1 med status, innehav och affärer
+- [x] Hemskärm enligt §9.1: orb, status, kontovärde, idag, marknader, innehav, affärer,
+      tomma lägen, felläge; skärmdumpar i `docs/screenshots/` (med exempeldata)
+- [ ] API-tjänsten som ger hemskärmen riktig data (`/status`, `/portfolio`, `/trades`, `/today`)
+- [ ] Hemskärmens e2e-kontroll (`npm run e2e`) i CI
+- [ ] Granskning av `execution/` (avbröts av användningsgränsen, ska köras om)
 - [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
 - [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)

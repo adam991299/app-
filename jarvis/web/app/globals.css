@@ -1,10 +1,12 @@
-/* Design tokens from JARVIS_SPEC.md §9.1. Every colour in the app comes from here. */
+/* Design tokens from JARVIS_SPEC.md §9.1. Every colour, size and radius comes from here. */
 :root {
   color-scheme: dark;
   --color-background: #05070b;
   --color-surface: #0d1117;
+  --color-surface-glass: rgba(13, 17, 23, 0.72);
   --color-surface-raised: #141a23;
   --color-divider: rgba(255, 255, 255, 0.06);
+  --color-highlight: rgba(255, 255, 255, 0.07);
   --color-text: #f2f4f8;
   --color-text-secondary: #8a93a3;
   --color-glow-from: #4ce0ff;
@@ -12,8 +14,24 @@
   --color-gain: #30d158;
   --color-loss: #ff453a;
   --color-warning: #ffb340;
+  --color-paper: #6cb6ff;
   --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter",
     system-ui, sans-serif;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --radius-card: 20px;
+  --radius-pill: 999px;
+  --text-large-title: 700 34px/41px var(--font-system);
+  --text-title: 700 28px/34px var(--font-system);
+  --text-headline: 600 17px/22px var(--font-system);
+  --text-body: 400 17px/24px var(--font-system);
+  --text-subhead: 400 15px/20px var(--font-system);
+  --text-footnote: 400 13px/18px var(--font-system);
+  --text-caption: 400 12px/16px var(--font-system);
+  --motion-breathe: 6s;
 }
 
 * {
@@ -26,32 +44,316 @@ body {
   min-height: 100%;
   background: var(--color-background);
   color: var(--color-text);
-  font-family: var(--font-system);
+  font: var(--text-body);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
-main {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px max(24px, env(safe-area-inset-left));
-  max-width: 560px;
+h1,
+h2,
+p,
+ul,
+dl,
+dd {
+  margin: 0;
+  padding: 0;
+}
+
+ul {
+  list-style: none;
+}
+
+.page {
+  max-width: 1040px;
   margin: 0 auto;
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) max(var(--space-2), env(safe-area-inset-right))
+    calc(var(--space-6) + env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
+  display: grid;
+  gap: var(--space-3);
 }
 
-h1 {
-  margin: 0;
-  font-size: 34px;
-  line-height: 41px;
-  font-weight: 700;
+.page.center {
+  min-height: 100dvh;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  max-width: 420px;
 }
 
-p {
-  margin: 0;
-  font-size: 17px;
-  line-height: 24px;
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.large-title {
+  font: var(--text-large-title);
+}
+
+.title {
+  font: var(--text-title);
+}
+
+.headline {
+  font: var(--text-headline);
+}
+
+.subhead {
+  font: var(--text-subhead);
+}
+
+.secondary {
   color: var(--color-text-secondary);
+  font: var(--text-subhead);
+}
+
+.caption {
+  color: var(--color-text-secondary);
+  font: var(--text-caption);
+}
+
+.briefing {
+  margin-top: var(--space-1);
+  max-width: 46ch;
+}
+
+.badge {
+  flex: none;
+  font: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid currentColor;
+}
+
+.badge[data-mode="paper"] {
+  color: var(--color-paper);
+}
+
+.badge[data-mode="live"] {
+  color: var(--color-gain);
+}
+
+.columns {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.column {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .columns {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: var(--space-4);
+  }
+}
+
+.hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+}
+
+.state {
+  font: var(--text-headline);
+  margin-top: var(--space-2);
+}
+
+.reason {
+  max-width: 36ch;
+}
+
+.big-number {
+  font: 200 44px/52px var(--font-system);
+  letter-spacing: -0.01em;
+  margin-top: var(--space-2);
+}
+
+.change[data-sign="positive"] {
+  color: var(--color-gain);
+}
+
+.change[data-sign="negative"] {
+  color: var(--color-loss);
+}
+
+.change[data-sign="zero"] {
+  color: var(--color-text-secondary);
+}
+
+.card {
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+}
+
+.label {
+  font: var(--text-footnote);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-1);
+}
+
+.list > li {
+  padding: 12px 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.list > li:first-child {
+  border-top: 0;
+}
+
+.row,
+.item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.item {
+  display: grid;
+  gap: 4px;
+}
+
+.explanation {
+  font: var(--text-subhead);
+  margin-top: 4px;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--color-text-secondary);
+}
+
+.dot[data-open="true"] {
+  background: var(--color-gain);
+}
+
+.today {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
+.today dt {
+  font: var(--text-footnote);
+  color: var(--color-text-secondary);
+}
+
+.today dd {
+  font: var(--text-headline);
+}
+
+.empty {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.footer {
+  text-align: center;
+}
+
+.button {
+  font: var(--text-headline);
+  color: var(--color-background);
+  background: var(--color-text);
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 12px var(--space-3);
+  margin-top: var(--space-2);
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-glow-from);
+  outline-offset: 3px;
+}
+
+/* The orb: Jarvis's face. Tone carries the system state. */
+.orb {
+  --orb-a: var(--color-glow-from);
+  --orb-b: var(--color-glow-to);
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle, color-mix(in srgb, var(--orb-b) 28%, transparent) 0%, transparent 68%);
+}
+
+.orb-core {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #ffffff 0%, var(--orb-a) 24%, var(--orb-b) 70%, var(--color-background) 100%);
+  box-shadow: 0 0 44px color-mix(in srgb, var(--orb-a) 45%, transparent);
+  animation: breathe var(--motion-breathe) ease-in-out infinite;
+}
+
+.orb[data-tone="waiting"] .orb-core {
+  opacity: 0.8;
+  animation-duration: calc(var(--motion-breathe) * 1.5);
+}
+
+.orb[data-tone="dimmed"] .orb-core {
+  opacity: 0.35;
+  animation: none;
+}
+
+.orb[data-tone="warning"] {
+  --orb-a: var(--color-warning);
+  --orb-b: #b3541e;
+}
+
+@keyframes breathe {
+  50% {
+    transform: scale(1.07);
+    box-shadow: 0 0 64px color-mix(in srgb, var(--orb-b) 55%, transparent);
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.skeleton-title {
+  height: 41px;
+  width: 60%;
+}
+
+.skeleton-orb {
+  height: 260px;
+}
+
+.skeleton-card {
+  height: 140px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-core {
+    animation: none;
+  }
 }

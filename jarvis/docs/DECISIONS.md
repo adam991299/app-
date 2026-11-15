@@ -4,6 +4,13 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D16. Hemskärmen: ren CSS med design tokens, Tailwind väntar till Fas 6
+Specen nämner Tailwind. Hemskärmen är byggd med vanliga CSS-variabler (alla färger, mått och
+typsnitt som tokens enligt §9.1), eftersom en enda vy inte behöver mer. Tailwind-temat och
+komponentkatalogen (`/design`) byggs i Fas 6 ovanpå samma tokens. Skärmdumparna i
+`docs/screenshots/` använder exempeldata som bara finns i testerna; appen själv visar
+aldrig påhittade siffror.
+
 ### D14. Adam tar bort kraven på tid i pappershandel
 Adam: "ta bort dem där kraven på 10 och 60 dagar. Jag vill inte behöva vänta fler månader."
 Ändrat efter Adams uttryckliga beslut (avviker från specen §00.5, §6.4 och §13):

@@ -45,6 +45,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build
       - name: Vulnerability scan (spec §10)
         run: npm audit --audit-level=high
