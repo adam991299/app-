@@ -4,6 +4,15 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D18. Trendstrategin: regler nu, förväntad vinst först efter backtest
+Strategin (55 dagars utbrott, stopp 2 × ATR, glidande stopp på 20 dagars lägsta; fyra
+parametrar) är byggd som rena regler. Risk-motorn kräver en förväntad vinst på minst
+2 × kostnaden för varje affär. Den siffran får inte hittas på (regel 1): den ska komma från
+backtestet i Fas 2. Tills dess ger strategin inga order av sig själv. För att testa hela
+kedjan i papper kan ett antagande läggas in uttryckligen i en inställningsfil för papper,
+märkt som antagande i journalen. *Fråga till Adam: vill du det, eller ska pappershandeln
+vänta på backtestet?*
+
 ### D17. Beslut efter granskningen av orderhanteringen
 Granskaren hittade fem fel, alla rättade med test:
 - En stopp som hör till ett köp som ännu inte gått igenom räknades som skydd. Nu räknas
