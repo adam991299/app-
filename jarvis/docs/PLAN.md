@@ -83,7 +83,12 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
       (`docs/screenshots/home-live-sim-*.png`)
 - [ ] Hemskärmens e2e-kontroll (`npm run e2e`) i CI
 - [x] Granskning av `execution/`, fem fel rättade med test (D17)
-- [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**
+- [x] IBKR-adapter (`broker/ibkr.py`, `ib_async` 2.1.0): bracket som en enhet, `orderRef` som
+      order-ID, idempotens, statusmappning, flytt av stopp, fyllnader först när provisionen är
+      känd; prispriser avrundas till tillåtna steg (D20). Testad mot fejkad gateway.
+- [ ] Provkörning mot riktig IB Gateway och Adams papperskonto — **kräver servern**
+- [ ] Körslinga (execution-engine-tjänsten): anslut med återförsök, återhämtning,
+      avstämning varje minut, kurser från IBKR, stopphöjning efter stängning
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
 - [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)
 

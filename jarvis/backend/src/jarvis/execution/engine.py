@@ -38,6 +38,7 @@ from jarvis.broker import (
 )
 from jarvis.config.settings import Risk
 from jarvis.domain import Account, Instrument, Position, Quote, Side
+from jarvis.domain.ticks import round_down, round_up
 from jarvis.execution.alerts import AlertLevel, Alerts
 from jarvis.execution.states import InvalidTransitionError, check_transition
 from jarvis.risk.breakers import BreakerStatus, Controls, SystemHealth, TradingState, evaluate
@@ -223,13 +224,20 @@ class ExecutionEngine:
                 await self._apply(at_broker, now)
                 return Result(Outcome.DUPLICATE, cid, detail=at_broker.status.value)
 
+        # Round to the broker's price ticks before anything is checked or journaled, in the
+        # direction that never adds risk: pay at most the limit, stop no farther away.
+        limit_price = round_down(signal.limit_price)
+        stop_price = round_up(signal.stop_price)
+        take_profit = (
+            None if signal.take_profit_price is None else round_up(signal.take_profit_price)
+        )
         proposal = OrderProposal(
             instrument=signal.instrument,
             side=Side.BUY,
             quantity=signal.quantity,
-            limit_price=signal.limit_price,
+            limit_price=limit_price,
             estimated_cost=signal.estimated_cost,
-            stop_price=signal.stop_price,
+            stop_price=stop_price,
             expected_edge=signal.expected_edge,
         )
         try:
@@ -262,9 +270,9 @@ class ExecutionEngine:
             instrument=signal.instrument,
             side=Side.BUY,
             quantity=signal.quantity,
-            limit_price=signal.limit_price,
-            stop_price=signal.stop_price,
-            take_profit_price=signal.take_profit_price,
+            limit_price=limit_price,
+            stop_price=stop_price,
+            take_profit_price=take_profit,
         )
         await self._journal(request, signal, now)
         try:
@@ -346,6 +354,7 @@ class ExecutionEngine:
     async def raise_stop(self, entry_id: str, new_stop: Decimal) -> Result:
         """Move a bracket's stop up (trailing exit). Never down, never through the price."""
         stop_id = f"{entry_id}.stop"
+        new_stop = round_down(new_stop)
         stored = await self._store.order(stop_id)
         if stored is None or stored.status.is_terminal:
             return Result(Outcome.STOP_UNCHANGED, stop_id, detail="no working stop")

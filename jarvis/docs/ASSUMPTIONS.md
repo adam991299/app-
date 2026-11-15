@@ -22,6 +22,8 @@ flyttas då till "Verifierat" med datum och källa.
 | A13 | Att IBKR:s papperskonto får samma gratis realtidsdata (Cboe One/IEX) som huvudkontot. | Fas 0.5 |
 | A14 | Att Jarvis ryms på 1 OCPU och 6 GB. Adams Oracle-konto tillåter bara det (2026-11-15), inte de rapporterade 2 OCPU/12 GB. Uppskattat behov: ca 4 GB. Mäts när allt kör på servern; Grafana och Prometheus kan stängas av om minnet inte räcker. | Fas 0.5 |
 | A15 | Att en andra användare utan uttagsrätt går att skapa på ett privat ISK-konto. | Före riktig handel |
+| A16 | Hur IBKR hanterar bracket-barnens antal när köpet delfylls och resten avbryts. Jarvis räknar ändå bara skydd som är aktivt (köpt minus sålt), så felet kan inte ge oskyddade positioner, men beteendet ska ses i papper. | Provkörning mot papperskontot |
+| A17 | Att `reqExecutions` ger dagens fyllnader efter en omstart och att provisionen alltid kommer. | Provkörning mot papperskontot |
 | A12 | IBKR:s tider för daglig omstart och intervallet för ny 2FA-inloggning (specen anger "normalt en gång i veckan"). | Fas 0.5 |
 
 ## Verifierat

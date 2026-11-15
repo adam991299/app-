@@ -4,6 +4,22 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D20. IBKR-kopplingen
+- Jarvis order-ID skickas i IBKR:s fält `orderRef` (stopp och mål får `.stop` och `.tp`).
+  Före varje ny order söks befintliga order med samma `orderRef`, även avslutade, så en
+  order kan aldrig skickas två gånger.
+- Ett köp skickas som en bracket: köporder som gäller dagen (DAY) och stopp (och eventuellt
+  mål) som gäller tills vidare (GTC). IBKR aktiverar stoppen när köpet fylls och tar bort
+  den andra när den ena utlöses.
+- Priser avrundas till tillåtna prissteg (hela cent från 1 USD) i orderhanteringen, innan
+  risk-kontroll och journal, och alltid åt det håll som inte ökar risken: köppris nedåt,
+  första stopp uppåt, ny glidande stopp nedåt.
+- En fyllnad bokförs först när IBKR har skickat provisionen, så kostnaden aldrig blir noll.
+- Order och affärer som saknar `orderRef` har inte gjorts av Jarvis och flaggas vid
+  avstämningen.
+- Jarvis lösenord till IBKR finns bara i gatewayn (IBC); Jarvis själv pratar bara med
+  gatewayn på det interna nätverket.
+
 ### D19. Appen läser en lägesrapport, inte mäklaren direkt
 Orderhanteringen sparar efter varje avstämning en lägesrapport (kontovärde, innehav, läge,
 skäl) i databasen. API:t läser bara den, så appen behöver ingen egen kontakt med mäklaren.

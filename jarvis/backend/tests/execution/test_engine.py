@@ -632,7 +632,7 @@ async def test_reconcile_publishes_the_account_state_for_the_app(world: World) -
     assert position["market_value"] == "5100.00"
     assert position["unrealized_pnl"] == "100.00"
     assert position["unrealized_pnl_pct"] == "2.00"
-    assert position["stop_price"] == "95"
+    assert position["stop_price"] == "95.00"
     assert position["strategy"] == "trend"
     assert position["currency"] == "USD"
 
@@ -655,3 +655,25 @@ async def test_published_state_for_an_unknown_holding(world: World) -> None:
     assert stored is not None
     assert stored[1]["reconciled"] is False
     assert stored[1]["positions"][0]["currency"] is None
+
+
+async def test_prices_are_rounded_to_ticks_without_adding_risk(world: World) -> None:
+    result = await world.engine.submit_entry(
+        signal(
+            "ticks",
+            limit_price=D("100.2079"),
+            stop_price=D("94.6612"),
+            take_profit_price=D("120.004"),
+        )
+    )
+    entry = await world.store.known_order(result.client_order_id)
+    stop = await world.store.known_order(f"{result.client_order_id}.stop")
+    tp = await world.store.known_order(f"{result.client_order_id}.tp")
+    assert entry.limit_price == D("100.20")  # never pay more than planned
+    assert stop.stop_price == D("94.67")  # stop closer, never farther
+    assert tp.limit_price == D("120.01")
+    raised = await world.engine.raise_stop(result.client_order_id, D("96.509"))
+    assert raised.outcome is Outcome.STOP_RAISED
+    assert (await world.store.known_order(f"{result.client_order_id}.stop")).stop_price == D(
+        "96.50"
+    )
