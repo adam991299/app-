@@ -20,14 +20,23 @@ if [ -n "$unhealthy" ]; then
   echo "FEL: tjänster som inte är friska:"; echo "$unhealthy"; exit 1
 fi
 
-curl --fail --silent --show-error --insecure --retry 10 --retry-delay 2 --retry-all-errors \
-  https://localhost/api/healthz | grep -q '"service":"api"'
-curl --fail --silent --show-error --insecure https://localhost/healthz | grep -q '"service":"web"'
-curl --fail --silent --show-error --insecure https://localhost/ | grep -q 'Jarvis'
+fetch() { curl --fail --silent --show-error --insecure --retry 10 --retry-delay 2 --retry-all-errors "$1"; }
 
-published="$(docker compose ps --format '{{.Service}} {{.Ports}}' | grep -E '0\.0\.0\.0|:::' | grep -v '^caddy ' || true)"
-if [ -n "$published" ]; then
-  echo "FEL: andra tjänster än caddy publicerar portar:"; echo "$published"; exit 1
+body="$(fetch https://localhost/api/healthz)"; grep '"service":"api"' <<<"$body" >/dev/null
+body="$(fetch https://localhost/healthz)"; grep '"service":"web"' <<<"$body" >/dev/null
+body="$(fetch https://localhost/)"; grep 'Jarvis' <<<"$body" >/dev/null
+
+if curl --silent --insecure --output /dev/null --fail https://localhost/api/openapi.json; then
+  echo "FEL: API-schemat är nåbart utifrån"; exit 1
+fi
+
+published="$(docker ps --filter "label=com.docker.compose.project=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')" --format '{{.Label "com.docker.compose.service"}} {{.Ports}}' | grep -- '->' || true)"
+others="$(grep -v '^caddy ' <<<"$published" || true)"
+if [ -n "$others" ]; then
+  echo "FEL: andra tjänster än caddy publicerar portar:"; echo "$others"; exit 1
+fi
+if grep -E -- '->' <<<"$published" | grep -oE '[0-9]+->' | grep -v '^443->' >/dev/null; then
+  echo "FEL: caddy publicerar annat än port 443:"; echo "$published"; exit 1
 fi
 
 echo "OK: alla tjänster kör och svarar."

@@ -37,6 +37,11 @@ def test_every_service_reports_health(service: ServiceName) -> None:
     assert datetime.fromisoformat(body["time"]).utcoffset() is not None
 
 
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_api_schema_is_not_exposed(path: str) -> None:
+    assert TestClient(create_app(ServiceName.API)).get(path).status_code == 404
+
+
 def test_logs_are_json_with_service_name() -> None:
     stream = io.StringIO()
     configure_logging("risk-engine", stream)

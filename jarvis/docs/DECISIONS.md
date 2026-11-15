@@ -19,6 +19,13 @@ i en fil skulle en felaktig redigering kunna slå på riktig handel. Läget komm
 ligga i databasen med audit-logg (byggs i Fas 0.5 och Fas 6), och config-systemet avvisar
 okända fält.
 
+### D2b. Belåning och blankning finns inte heller i config-filen
+Av samma skäl som D2. §3 och §7.1: Jarvis är long-only och obelånad tills Adam ändrar det i
+Avancerat, där också ISK-reglerna ska kontrolleras. Config-filen har därför inget fält för
+belåning eller blankning, och bruttoexponeringen kan inte sättas över 100 %. Möjligheten
+byggs i appen (med passkey och kontroll mot kontotypen) om och när Adam vill ha den.
+*Hittades av granskningsagenten: första versionen hade ett fält `leverage_allowed`.*
+
 ### D3. Bara värden som specen anger finns i config
 Specen lämnar flera standardvärden öppna (t.ex. max antal affärer per vecka, max order per
 minut, "N fel i rad" mot mäklaren, hur mycket nattläget sänker positionsstorleken). De
@@ -30,6 +37,14 @@ förväg.
 dagsförlust 0,5–5 %, veckoförlust 1–10 %, kill switch 2–20 %, och alltid
 dag < vecka < kill switch ≤ projektets stoppgräns (§16, 20 %). Värden utanför gör att
 Jarvis vägrar starta.
+
+### D4b. Alla gränser har ett golv och ett tak
+En gräns ska inte gå att göra verkningslös med ett extremt värde. Exempel: gap-scenariot
+kan inte sättas under 10 % (aktier) eller 20 % (krypto), kassareserven inte under 5 %,
+max öppna positioner inte över 100, incheckningsintervallet inte över 90 dagar, och risk per
+affär aldrig över dagsgränsen. Oändliga tal, text och sant/falskt i stället för siffror
+avvisas, liksom dubbla nycklar i filen. Intervallen är mina val där specen inte anger något
+och kan justeras av Adam.
 
 ### D5. Marknader slås på när deras fas är klar
 Standard i config: bara amerikanska aktier påslagna (Fas 0.5). Norden, ETF:er, råvaror och

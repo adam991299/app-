@@ -4,8 +4,13 @@ Every default below comes from JARVIS_SPEC.md (section noted per group). Values 
 spec does not fix are deliberately absent until the module that needs them is built.
 All percentages are expressed in percent units (0.75 means 0.75 %).
 
-Trading mode (paper/live) is intentionally NOT part of this file: live trading can
-only be enabled by Adam in the app (spec §0 rule 3, §9.4), never by editing config.
+Three things are intentionally NOT configurable here, because a file edit must never be
+able to raise risk on its own: trading mode (paper/live, spec §0 rule 3 and §9.4),
+leverage and short selling (§3, §7.1). Jarvis is long-only and unleveraged until Adam
+enables anything else in the app with a passkey.
+
+Values are parsed strictly: no silent coercion of strings or booleans to numbers, and
+no infinities.
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class _Section(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, allow_inf_nan=False)
 
 
 class AppSettings(_Section):
@@ -41,8 +46,8 @@ class NightMode(_Section):
     """Stricter limits at night in Adam's display timezone (§1.6)."""
 
     enabled: bool = True
-    start: time = time(23, 0)
-    end: time = time(7, 0)
+    start: time = Field(default=time(23, 0), strict=False)
+    end: time = Field(default=time(7, 0), strict=False)
 
     @model_validator(mode="after")
     def _non_empty_window(self) -> Self:
@@ -76,8 +81,8 @@ class Markets(_Section):
 class Universe(_Section):
     """Nightly universe filter thresholds (§3)."""
 
-    min_adv_nordics_msek: float = Field(default=5.0, gt=0)
-    min_adv_us_musd: float = Field(default=20.0, gt=0)
+    min_adv_nordics_msek: float = Field(default=5.0, ge=1.0)
+    min_adv_us_musd: float = Field(default=20.0, ge=1.0)
 
 
 class PerTradeRisk(_Section):
@@ -88,17 +93,16 @@ class PerTradeRisk(_Section):
 
 
 class PortfolioRisk(_Section):
-    """Per-portfolio limits (§7)."""
+    """Per-portfolio limits (§7). Gross exposure is capped at 100 %: no leverage."""
 
-    max_position_pct: float = Field(default=10.0, gt=0, le=100)
-    max_position_crypto_pct: float = Field(default=5.0, gt=0, le=100)
-    max_position_small_cap_pct: float = Field(default=5.0, gt=0, le=100)
+    max_position_pct: float = Field(default=10.0, gt=0, le=25)
+    max_position_crypto_pct: float = Field(default=5.0, gt=0, le=25)
+    max_position_small_cap_pct: float = Field(default=5.0, gt=0, le=25)
     max_sector_pct: float = Field(default=25.0, gt=0, le=100)
     max_crypto_total_pct: float = Field(default=15.0, gt=0, le=100)
     max_commodities_total_pct: float = Field(default=20.0, gt=0, le=100)
-    max_gross_exposure_pct: float = Field(default=100.0, gt=0, le=200)
-    min_cash_reserve_pct: float = Field(default=5.0, ge=0, lt=100)
-    long_only: bool = True
+    max_gross_exposure_pct: float = Field(default=100.0, gt=0, le=100)
+    min_cash_reserve_pct: float = Field(default=5.0, ge=5, lt=100)
 
 
 class CircuitBreakers(_Section):
@@ -121,16 +125,16 @@ class CircuitBreakers(_Section):
 class Turnover(_Section):
     """Over-trading guard (§7)."""
 
-    max_annual_turnover_multiple: float = Field(default=10.0, gt=0)
-    min_edge_to_cost_ratio: float = Field(default=2.0, ge=1.0)
+    max_annual_turnover_multiple: float = Field(default=10.0, gt=0, le=50)
+    min_edge_to_cost_ratio: float = Field(default=2.0, ge=1.0, le=20)
 
 
 class GapRisk(_Section):
     """Gap scenario sizing (§7)."""
 
-    single_stock_gap_pct: float = Field(default=25.0, gt=0, le=100)
-    crypto_gap_pct: float = Field(default=40.0, gt=0, le=100)
-    max_gap_loss_pct: float = Field(default=3.0, gt=0, le=10)
+    single_stock_gap_pct: float = Field(default=25.0, ge=10, le=100)
+    crypto_gap_pct: float = Field(default=40.0, ge=20, le=100)
+    max_gap_loss_pct: float = Field(default=3.0, gt=0, le=5)
 
 
 class TechnicalMax(_Section):
@@ -138,13 +142,12 @@ class TechnicalMax(_Section):
 
     single_stock_pct_of_budget: float = Field(default=25.0, gt=0, le=25.0)
     crypto_total_pct: float = Field(default=40.0, gt=0, le=40.0)
-    leverage_allowed: bool = False
 
 
 class Concurrency(_Section):
     """Simultaneous-position limits (§6.4.1)."""
 
-    max_open_positions: int = Field(default=25, ge=1)
+    max_open_positions: int = Field(default=25, ge=1, le=100)
     max_concurrent_daytrades: int = Field(default=5, ge=0)
 
 
@@ -152,7 +155,7 @@ class Daytrading(_Section):
     """Day-trading engine limits (§6.2.1)."""
 
     max_daily_loss_pct: float = Field(default=1.0, gt=0, le=2.0)
-    pause_after_consecutive_losses: int = Field(default=3, ge=1)
+    pause_after_consecutive_losses: int = Field(default=3, ge=1, le=10)
 
 
 class Risk(_Section):
@@ -169,16 +172,17 @@ class Risk(_Section):
     def _consistent(self) -> Self:
         portfolio, tech = self.portfolio, self.technical_max
         problems: list[str] = []
-        if portfolio.max_position_pct > tech.single_stock_pct_of_budget:
-            problems.append("max_position_pct exceeds the technical single-stock cap")
+        for name in ("max_position_pct", "max_position_crypto_pct", "max_position_small_cap_pct"):
+            if getattr(portfolio, name) > tech.single_stock_pct_of_budget:
+                problems.append(f"{name} exceeds the technical single-position cap")
+        if portfolio.max_position_small_cap_pct > portfolio.max_position_pct:
+            problems.append("max_position_small_cap_pct exceeds max_position_pct")
         if portfolio.max_position_crypto_pct > portfolio.max_crypto_total_pct:
             problems.append("max_position_crypto_pct exceeds max_crypto_total_pct")
         if portfolio.max_crypto_total_pct > tech.crypto_total_pct:
             problems.append("max_crypto_total_pct exceeds the technical crypto cap")
-        if portfolio.max_gross_exposure_pct > 100 and not tech.leverage_allowed:
-            problems.append("gross exposure above 100 % requires leverage_allowed")
-        if not portfolio.long_only and not tech.leverage_allowed:
-            problems.append("short selling requires leverage_allowed (margin account)")
+        if self.per_trade.max_risk_pct > self.circuit_breakers.daily_loss_pct:
+            problems.append("per-trade risk exceeds the daily loss circuit breaker")
         if self.per_trade.max_risk_pct > self.gap.max_gap_loss_pct:
             problems.append("per-trade risk exceeds the allowed gap-scenario loss")
         if self.concurrency.max_concurrent_daytrades > self.concurrency.max_open_positions:
@@ -208,15 +212,15 @@ class Lifecycle(_Section):
     paper_min_trading_days: int = Field(default=60, ge=1)
     paper_min_trades: int = Field(default=50, ge=1)
     slow_strategy_paper_min_months: int = Field(default=3, ge=1)
-    paper_slippage_multiplier: float = Field(default=2.0, ge=1.0)
+    paper_slippage_multiplier: float = Field(default=2.0, ge=1.0, le=10)
 
 
 class Opportunities(_Section):
     """Opportunity notifications (§9.2.2)."""
 
-    max_per_day: int = Field(default=5, ge=0)
-    reprice_daytrade_pct: float = Field(default=0.5, gt=0)
-    reprice_swing_pct: float = Field(default=1.5, gt=0)
+    max_per_day: int = Field(default=5, ge=0, le=50)
+    reprice_daytrade_pct: float = Field(default=0.5, gt=0, le=5)
+    reprice_swing_pct: float = Field(default=1.5, gt=0, le=10)
 
 
 class Tax(_Section):
@@ -224,7 +228,7 @@ class Tax(_Section):
     from Skatteverket; they are never hard-coded, so they start unset."""
 
     model: Literal["isk", "capital_gains"] = "isk"
-    tax_year: int | None = Field(default=None, ge=2024)
+    tax_year: int | None = Field(default=None, ge=2024, le=2100)
     isk_tax_free_level_sek: float | None = Field(default=None, ge=0)
     isk_schablon_tax_pct: float | None = Field(default=None, ge=0, le=10)
 
@@ -241,24 +245,24 @@ class Tax(_Section):
 class Economics(_Section):
     """Cost honesty thresholds (§1.5)."""
 
-    break_even_warning_pct: float = Field(default=3.0, gt=0)
-    min_living_buffer_months: int = Field(default=12, ge=12)
+    break_even_warning_pct: float = Field(default=3.0, gt=0, le=10)
+    min_living_buffer_months: int = Field(default=12, ge=12, le=120)
 
 
 class CheckIn(_Section):
     """Adam's own dead-man's switch (§11.2)."""
 
-    interval_days: int = Field(default=7, ge=1)
-    halve_risk_after_days: int = Field(default=3, ge=1)
-    wind_down_after_days: int = Field(default=7, ge=1)
+    interval_days: int = Field(default=7, ge=1, le=90)
+    halve_risk_after_days: int = Field(default=3, ge=1, le=30)
+    wind_down_after_days: int = Field(default=7, ge=1, le=30)
 
 
 class ProjectStopRules(_Section):
     """Pre-committed stop rules for the whole project (§16)."""
 
-    evaluation_months: int = Field(default=12, ge=1)
+    evaluation_months: int = Field(default=12, ge=1, le=12)
     max_total_live_drawdown_pct: float = Field(default=20.0, gt=0, le=20.0)
-    min_months_per_capital_step: int = Field(default=3, ge=1)
+    min_months_per_capital_step: int = Field(default=3, ge=1, le=24)
 
 
 class Settings(_Section):

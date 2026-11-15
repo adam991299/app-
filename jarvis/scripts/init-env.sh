@@ -4,7 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ -e .env ]; then
-  echo ".env finns redan – ingenting ändrat."
+  chmod 600 .env
+  echo ".env finns redan – innehållet är oförändrat (rättigheter 600)."
   exit 0
 fi
 

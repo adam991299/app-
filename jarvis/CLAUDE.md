@@ -82,7 +82,7 @@ viktigaste; detaljer ett tryck bort.
 ## Kommandon
 | Vad | Var | Kommando |
 |---|---|---|
-| Backend-kontroller | `backend/` | `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest` |
+| Backend-kontroller | `backend/` | `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest && uv run pip-audit --skip-editable` |
 | Webb-kontroller | `web/` | `npm run lint && npm run typecheck && npm run build` |
 | Starta allt | `jarvis/` | `scripts/init-env.sh && docker compose up -d --build --wait` |
 | Röktest | `jarvis/` | `scripts/smoke.sh` |

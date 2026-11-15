@@ -20,10 +20,25 @@ class ConfigError(Exception):
     """The configuration is missing, unreadable or invalid. Jarvis must not start."""
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate keys instead of silently keeping the last one."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
+        seen: set[Any] = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"duplicate key {key!r}", key_node.start_mark
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep)
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except OSError as exc:
+        raw = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)  # noqa: S506
+    except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError(f"cannot read config file {path}: {exc}") from exc
     except yaml.YAMLError as exc:
         raise ConfigError(f"config file {path} is not valid YAML: {exc}") from exc

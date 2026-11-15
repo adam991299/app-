@@ -3,8 +3,6 @@ name: Jarvis CI
 on:
   push:
     paths: ["jarvis/**", ".github/workflows/jarvis-ci.yml"]
-  pull_request:
-    paths: ["jarvis/**", ".github/workflows/jarvis-ci.yml"]
 
 permissions:
   contents: read
@@ -27,6 +25,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest
+      - name: Vulnerability scan (spec §10)
+        run: uv run pip-audit --skip-editable
 
   web:
     runs-on: ubuntu-latest
@@ -44,6 +44,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      - name: Vulnerability scan (spec §10)
+        run: npm audit --audit-level=high
 
   compose:
     runs-on: ubuntu-latest

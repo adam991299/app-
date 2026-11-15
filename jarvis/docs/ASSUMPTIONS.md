@@ -29,8 +29,15 @@ flyttas då till "Verifierat" med datum och källa.
 | 2026-11-14 | Next.js 16.4.6 är aktuell version; appen bygger med App Router och TypeScript strict. | registry.npmjs.org, `npm run build` |
 
 ## Kända begränsningar
-- **Docker-avbildernas taggar är inte låsta till digest.** `timescaledb:latest-pg17`,
-  `prometheus:latest` och `grafana:latest` låses till exakta versioner i Fas 7 (§10 kräver
-  låsta beroenden).
+- **Docker-avbilderna är låsta till exakt version men inte till digest.** Digest-låsning och
+  automatiska uppdateringar görs i Fas 7 (§10). `ib-gateway` använder taggen `stable` tills
+  den verifieras i Fas 0.5 (A2).
 - **Prometheus samlar bara in sig själv.** Tjänsterna får mått (`/metrics`) när de får
   innehåll (§11).
+- **En känd sårbarhet av nivån "moderate" i ett utvecklingsverktyg** (`minimatch` via
+  `eslint-config-next`, GHSA-g3hv-75wg-m249). Den finns bara i lint-verktyget och följer inte
+  med i det som körs på servern. Ingen rättad version finns för Next.js 16 ännu. CI stoppar
+  på nivån "high" och uppåt.
+- **Redis saknar lösenord och containrarna saknar extra härdning** (`cap_drop`,
+  `no-new-privileges`, skrivskyddat filsystem). Redis nås bara på det interna nätverket.
+  Härdningen görs i Fas 7.

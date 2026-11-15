@@ -74,11 +74,11 @@ den med miljövariabeln `JARVIS_CONFIG_OVERRIDE`. Allt valideras vid start.
 | `markets` | Vilka marknader Jarvis får handla. Terminer och pre/after-market är avstängda. |
 | `universe` | Lägsta dagsomsättning för att ett instrument ska få handlas. |
 | `risk.per_trade` | Högst 0,75 % av kapitalet i risk per affär; högst ¼ Kelly. |
-| `risk.portfolio` | Tak per position, sektor, krypto och råvaror; kassareserv; ingen blankning. |
+| `risk.portfolio` | Tak per position, sektor, krypto och råvaror; kassareserv på minst 5 %. |
 | `risk.circuit_breakers` | Automatiska stopp vid dags-, vecko- och toppförlust. Kan inte stängas av. |
 | `risk.turnover` | Skydd mot överhandel: max omsättning och krav på vinst jämfört med kostnad. |
 | `risk.gap` | Hur stor förlust en position får ge om kursen gapar förbi stoppen. |
-| `risk.technical_max` | Hårda tak som skyddar mot buggar och felklick. Ingen belåning. |
+| `risk.technical_max` | Hårda tak som skyddar mot buggar och felklick. |
 | `risk.concurrency` | Max antal öppna positioner och samtidiga daytrades. |
 | `risk.daytrading` | Egna förlustgränser för daytrading. |
 | `validation` | Kraven en strategi måste klara innan den får handla. |
@@ -89,8 +89,8 @@ den med miljövariabeln `JARVIS_CONFIG_OVERRIDE`. Allt valideras vid start.
 | `check_in` | Hur ofta du behöver checka in innan Jarvis drar ner risken. |
 | `project_stop_rules` | Stoppreglerna för hela projektet (§16). |
 
-Handelsläget (papper eller live) finns medvetet **inte** i någon fil. Det går bara att ändra i
-appen.
+Handelsläge (papper eller live), belåning och blankning finns medvetet **inte** i någon fil.
+Jarvis är long-only och obelånad, och sådant som ökar risken ska bara gå att ändra i appen.
 
 ## Så är det uppbyggt
 

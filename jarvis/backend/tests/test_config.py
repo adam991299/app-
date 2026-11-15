@@ -25,17 +25,129 @@ def test_shipped_default_file_matches_model_defaults() -> None:
     assert load_settings(DEFAULT_CONFIG) == Settings()
 
 
-def test_defaults_follow_the_spec() -> None:
-    settings = Settings()
-    assert settings.risk.per_trade.max_risk_pct == 0.75
-    assert settings.risk.portfolio.max_position_pct == 10
-    assert settings.risk.circuit_breakers.daily_loss_pct == 2
-    assert settings.risk.circuit_breakers.weekly_loss_pct == 4
-    assert settings.risk.circuit_breakers.kill_switch_drawdown_pct == 10
-    assert settings.risk.portfolio.long_only
-    assert not settings.risk.technical_max.leverage_allowed
-    assert not settings.markets.futures
-    assert settings.tax.isk_schablon_tax_pct is None
+def test_every_default_is_the_number_in_the_spec() -> None:
+    """Written by hand from JARVIS_SPEC.md, independently of the model defaults."""
+    spec = {
+        "app": {"locale": "sv-SE", "display_timezone": "Europe/Stockholm"},  # §0
+        "night_mode": {"enabled": True, "start": "23:00:00", "end": "07:00:00"},  # §1.6
+        "markets": {  # §3, D5
+            "us_equities": True,
+            "nordic_equities": False,
+            "etfs": False,
+            "commodities": False,
+            "crypto": False,
+            "futures": False,
+            "us_extended_hours": False,
+        },
+        "universe": {"min_adv_nordics_msek": 5.0, "min_adv_us_musd": 20.0},  # §3
+        "risk": {
+            "per_trade": {"max_risk_pct": 0.75, "max_kelly_fraction": 0.25},  # §7
+            "portfolio": {  # §7
+                "max_position_pct": 10.0,
+                "max_position_crypto_pct": 5.0,
+                "max_position_small_cap_pct": 5.0,
+                "max_sector_pct": 25.0,
+                "max_crypto_total_pct": 15.0,
+                "max_commodities_total_pct": 20.0,
+                "max_gross_exposure_pct": 100.0,
+                "min_cash_reserve_pct": 5.0,
+            },
+            "circuit_breakers": {  # §7, §11
+                "daily_loss_pct": 2.0,
+                "weekly_loss_pct": 4.0,
+                "kill_switch_drawdown_pct": 10.0,
+                "max_clock_drift_seconds": 1.0,
+            },
+            "turnover": {"max_annual_turnover_multiple": 10.0, "min_edge_to_cost_ratio": 2.0},
+            "gap": {"single_stock_gap_pct": 25.0, "crypto_gap_pct": 40.0, "max_gap_loss_pct": 3.0},
+            "technical_max": {"single_stock_pct_of_budget": 25.0, "crypto_total_pct": 40.0},  # §7.1
+            "concurrency": {"max_open_positions": 25, "max_concurrent_daytrades": 5},  # §6.4.1
+            "daytrading": {"max_daily_loss_pct": 1.0, "pause_after_consecutive_losses": 3},
+        },
+        "validation": {  # §6.3
+            "min_oos_trades": 100,
+            "min_deflated_sharpe_probability": 0.95,
+            "max_drawdown_pct": 20.0,
+            "min_profit_factor": 1.3,
+            "min_positive_walk_forward_windows_pct": 60.0,
+            "holdout_pct": 20.0,
+            "max_free_parameters": 5,
+        },
+        "lifecycle": {  # §6.4, §11.3
+            "paper_min_trading_days": 60,
+            "paper_min_trades": 50,
+            "slow_strategy_paper_min_months": 3,
+            "paper_slippage_multiplier": 2.0,
+        },
+        "opportunities": {"max_per_day": 5, "reprice_daytrade_pct": 0.5, "reprice_swing_pct": 1.5},
+        "tax": {  # §1.5: never hard-coded
+            "model": "isk",
+            "tax_year": None,
+            "isk_tax_free_level_sek": None,
+            "isk_schablon_tax_pct": None,
+        },
+        "economics": {"break_even_warning_pct": 3.0, "min_living_buffer_months": 12},  # §1.5
+        "check_in": {"interval_days": 7, "halve_risk_after_days": 3, "wind_down_after_days": 7},
+        "project_stop_rules": {  # §16
+            "evaluation_months": 12,
+            "max_total_live_drawdown_pct": 20.0,
+            "min_months_per_capital_step": 3,
+        },
+    }
+    assert Settings().model_dump(mode="json") == spec
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "risk:\n  technical_max:\n    leverage_allowed: true\n",
+        "risk:\n  portfolio:\n    long_only: false\n",
+        "risk:\n  portfolio:\n    max_gross_exposure_pct: 150\n",
+        "trading:\n  mode: live\n",
+        "mode: live\n",
+    ],
+)
+def test_a_file_can_never_enable_leverage_shorting_or_live(tmp_path: Path, content: str) -> None:
+    with pytest.raises(ConfigError):
+        load_settings(write(tmp_path, "c.yaml", content))
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "risk:\n  circuit_breakers:\n    daily_loss_pct: true\n",
+        "risk:\n  circuit_breakers:\n    daily_loss_pct: '3'\n",
+        "risk:\n  turnover:\n    max_annual_turnover_multiple: .inf\n",
+        "risk:\n  turnover:\n    max_annual_turnover_multiple: .nan\n",
+        "risk:\n  gap:\n    single_stock_gap_pct: 0.0001\n",
+        "risk:\n  gap:\n    crypto_gap_pct: 1\n",
+        "risk:\n  portfolio:\n    min_cash_reserve_pct: 0\n",
+        "risk:\n  concurrency:\n    max_open_positions: 100000\n",
+        "risk:\n  daytrading:\n    pause_after_consecutive_losses: 1000\n",
+        "check_in:\n  interval_days: 100000\n",
+    ],
+)
+def test_limits_cannot_be_neutralised_with_extreme_values(tmp_path: Path, content: str) -> None:
+    with pytest.raises(ConfigError):
+        load_settings(write(tmp_path, "c.yaml", content))
+
+
+def test_whole_numbers_are_accepted_for_percentages(tmp_path: Path) -> None:
+    path = write(tmp_path, "c.yaml", "risk:\n  portfolio:\n    max_sector_pct: 20\n")
+    assert load_settings(path).risk.portfolio.max_sector_pct == 20.0
+
+
+def test_duplicate_keys_are_rejected(tmp_path: Path) -> None:
+    content = "check_in:\n  interval_days: 7\n  interval_days: 60\n"
+    with pytest.raises(ConfigError, match="duplicate key 'interval_days'"):
+        load_settings(write(tmp_path, "c.yaml", content))
+
+
+def test_non_utf8_file_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "c.yaml"
+    path.write_bytes(b"\xff\xfe\x00bad")
+    with pytest.raises(ConfigError, match="cannot read config file"):
+        load_settings(path)
 
 
 def test_empty_file_gives_defaults(tmp_path: Path) -> None:
@@ -128,11 +240,24 @@ def test_futures_allowed_with_commodities() -> None:
 @pytest.mark.parametrize(
     ("risk", "expected"),
     [
-        ({"portfolio": {"max_position_pct": 30}}, "technical single-stock cap"),
+        ({"technical_max": {"single_stock_pct_of_budget": 8}}, "max_position_pct exceeds"),
+        (
+            {
+                "portfolio": {"max_position_crypto_pct": 12},
+                "technical_max": {"single_stock_pct_of_budget": 11},
+            },
+            "max_position_crypto_pct exceeds the technical",
+        ),
+        (
+            {"portfolio": {"max_position_small_cap_pct": 12}},
+            "small_cap_pct exceeds max_position_pct",
+        ),
+        (
+            {"per_trade": {"max_risk_pct": 2}, "circuit_breakers": {"daily_loss_pct": 1.5}},
+            "daily loss circuit",
+        ),
         ({"portfolio": {"max_position_crypto_pct": 20}}, "exceeds max_crypto_total_pct"),
-        ({"portfolio": {"max_crypto_total_pct": 45}}, "technical crypto cap"),
-        ({"portfolio": {"max_gross_exposure_pct": 150}}, "requires leverage_allowed"),
-        ({"portfolio": {"long_only": False}}, "short selling requires"),
+        ({"technical_max": {"crypto_total_pct": 10}}, "technical crypto cap"),
         ({"gap": {"max_gap_loss_pct": 0.5}}, "gap-scenario loss"),
         ({"concurrency": {"max_open_positions": 3}}, "exceeds max_open_positions"),
         (
@@ -144,16 +269,6 @@ def test_futures_allowed_with_commodities() -> None:
 def test_inconsistent_risk_limits_are_rejected(risk: dict[str, Any], expected: str) -> None:
     with pytest.raises(ValidationError, match=expected):
         Risk.model_validate(risk)
-
-
-def test_leverage_unlocks_gross_exposure_and_shorting() -> None:
-    risk = Risk.model_validate(
-        {
-            "technical_max": {"leverage_allowed": True},
-            "portfolio": {"max_gross_exposure_pct": 150, "long_only": False},
-        }
-    )
-    assert risk.portfolio.max_gross_exposure_pct == 150
 
 
 @pytest.mark.parametrize("level", [0, -1, 0.1, 6])

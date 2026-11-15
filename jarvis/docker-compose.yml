@@ -24,7 +24,7 @@ x-backend: &backend
 
 services:
   db:
-    image: timescale/timescaledb:latest-pg17
+    image: timescale/timescaledb:2.32.0-pg17
     restart: unless-stopped
     networks: [internal]
     environment:
@@ -33,13 +33,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?kör scripts/init-env.sh först}
     volumes: [db-data:/var/lib/postgresql/data]
     healthcheck:
-      test: [CMD-SHELL, pg_isready -U jarvis -d jarvis]
+      test: [CMD-SHELL, pg_isready -h 127.0.0.1 -U jarvis -d jarvis]
       interval: 5s
       timeout: 5s
       retries: 12
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.8.4-alpine
     restart: unless-stopped
     networks: [internal]
     volumes: [redis-data:/data]
@@ -102,7 +102,7 @@ services:
       start_period: 10s
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.9-alpine
     restart: unless-stopped
     networks: [internal]
     ports: ["443:443"]
@@ -116,7 +116,7 @@ services:
       web: { condition: service_healthy }
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     networks: [internal]
     volumes:
@@ -124,7 +124,7 @@ services:
       - prometheus-data:/prometheus
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.3.1
     restart: unless-stopped
     networks: [internal]
     environment:

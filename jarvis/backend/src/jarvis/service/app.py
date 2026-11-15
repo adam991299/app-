@@ -19,7 +19,13 @@ class Health(BaseModel):
 
 
 def create_app(service: ServiceName) -> FastAPI:
-    app = FastAPI(title=f"Jarvis {service.value}", version=__version__, docs_url=None)
+    app = FastAPI(
+        title=f"Jarvis {service.value}",
+        version=__version__,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
 
     @app.get("/healthz")
     def healthz() -> Health:
