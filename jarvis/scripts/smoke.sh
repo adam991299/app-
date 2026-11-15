@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-expected="api backup broker-service caddy db execution-engine grafana learning-service \
+expected="api backup broker-service caddy db grafana learning-service \
 market-data-service news-service notifier prometheus redis research-lab risk-engine \
 scheduler strategy-engine watchdog web"
 

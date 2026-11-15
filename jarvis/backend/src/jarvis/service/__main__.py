@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from fastapi import FastAPI
 
 from jarvis.api.app import create_api_app
 from jarvis.config import ConfigError, Settings, load_settings_from_env
+from jarvis.runner.service import create_execution_app
 from jarvis.service.app import create_app
 from jarvis.service.logging import configure_logging
 from jarvis.service.names import ServiceName
@@ -48,7 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def build_app(service: ServiceName, settings: Settings) -> FastAPI:
-    """The API serves the app from the database; other services are still health-only."""
+    """The API serves the app from the database, execution runs the trading loop; the
+    other services are still health-only."""
+    if service is ServiceName.EXECUTION:
+        return create_execution_app(settings, os.environ)
     if service is not ServiceName.API:
         return create_app(service)
     url = database_url_from_env()

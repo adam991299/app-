@@ -61,20 +61,21 @@ class IbClient(Protocol):
 
     client: Any
 
-    async def connectAsync(  # noqa: N802 - ib_async's name
+    def connectAsync(  # noqa: N802 - ib_async's name
         self,
         host: str,
         port: int,
-        clientId: int,  # noqa: N803 - ib_async's name
-        timeout: float,
+        *,
+        clientId: int,  # noqa: N803
+        timeout: float | None,
         account: str,
-    ) -> Any: ...
+    ) -> Awaitable[Any]: ...
 
     def disconnect(self) -> Any: ...
 
     def isConnected(self) -> bool: ...  # noqa: N802
 
-    async def accountSummaryAsync(self, account: str) -> list[Any]: ...  # noqa: N802
+    def accountSummaryAsync(self, account: str) -> Awaitable[list[Any]]: ...  # noqa: N802
 
     def positions(self, account: str) -> list[Any]: ...
 
@@ -86,9 +87,9 @@ class IbClient(Protocol):
 
     def cancelOrder(self, order: Order) -> Any: ...  # noqa: N802
 
-    async def reqExecutionsAsync(self) -> list[IbFill]: ...  # noqa: N802
+    def reqExecutionsAsync(self, execFilter: Any = None) -> Awaitable[list[IbFill]]: ...  # noqa: N802,N803
 
-    async def qualifyContractsAsync(self, *contracts: Contract) -> list[Any]: ...  # noqa: N802
+    def qualifyContractsAsync(self, *contracts: Contract) -> Awaitable[list[Any]]: ...  # noqa: N802
 
 
 @dataclass(frozen=True, slots=True)

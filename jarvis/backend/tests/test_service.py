@@ -121,6 +121,20 @@ def test_api_migrates_and_serves(
     assert {"/status", "/portfolio", "/trades", "/today", "/healthz"} <= routes
 
 
+def test_execution_engine_refuses_to_start_without_its_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database_url: str
+) -> None:
+    good = tmp_path / "good.yaml"
+    good.write_text("", encoding="utf-8")
+    monkeypatch.setenv("JARVIS_CONFIG", str(good))
+    monkeypatch.setenv("JARVIS_DATABASE_URL", database_url)
+    monkeypatch.delenv("JARVIS_IBKR_ACCOUNT", raising=False)
+    started: list[object] = []
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: started.append(a))
+    assert entrypoint.main(["--name", "execution-engine"]) == 1
+    assert started == []
+
+
 def test_unknown_service_name_is_rejected() -> None:
     with pytest.raises(SystemExit):
         entrypoint.main(["--name", "not-a-service"])

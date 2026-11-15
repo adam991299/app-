@@ -4,6 +4,18 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D21. Körslingan och de 20 aktierna
+- Den tunna versionen följer 20 stora, likvida amerikanska aktier i olika sektorer
+  (`config/universe_us.yaml`). Sektorn hämtas från IBKR. Listan ersätts av
+  universumfiltret i Fas 1.
+- Kurser används bara om IBKR levererar dem i realtid. Fördröjd data ger ingen kurs alls,
+  eftersom den annars skulle se färsk ut fast den är 15 minuter gammal.
+- Klockan kontrolleras mot NTP. Har den inte kunnat kontrolleras på en timme räknas den
+  som okänd, och då stoppas handeln (§11).
+- Stopparna flyttas upp 15 minuter efter att USA-börsen stängt, utifrån dagsdata som slutar
+  vid den stängda dagen.
+- Larmen skrivs till loggen tills notistjänsten (push och e-post) finns.
+
 ### D20. IBKR-kopplingen
 - Jarvis order-ID skickas i IBKR:s fält `orderRef` (stopp och mål får `.stop` och `.tp`).
   Före varje ny order söks befintliga order med samma `orderRef`, även avslutade, så en

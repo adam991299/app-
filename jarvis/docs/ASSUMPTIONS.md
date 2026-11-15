@@ -9,7 +9,7 @@ flyttas då till "Verifierat" med datum och källa.
 | # | Antagande | Verifieras i |
 |---|---|---|
 | A1 | ISK finns hos IBKR Ireland för svenska privatpersoner, och vilka begränsningar kontot har (blankning, belåning, derivat, terminer, krypto). | Fas 0.5, tillsammans med Adam |
-| A2 | Miljövariablerna för `ghcr.io/gnzsnz/ib-gateway` (`TWS_USERID`, `TWS_PASSWORD`, `TRADING_MODE`) och taggen `stable` stämmer med aktuell version. Tjänsten startas inte förrän i Fas 0.5. | Fas 0.5 |
+| A2 | Att `ghcr.io/gnzsnz/ib-gateway:stable` släpper in API-anslutningar från andra containrar på port **4004** i pappersläge (via socat). Exemplen i projektet visar 4003/4004, men vilken som är papper är inte bekräftat. Fel port syns direkt som "IB Gateway not reachable" i loggen; då byts `JARVIS_IBKR_PORT` till 4003. | Första starten på servern |
 | A3 | IBKR:s gräns för samtidiga realtidsrader (specen anger "vanligtvis 100") och priserna på datapaket. | Fas 1 |
 | A4 | IBKR:s regler för historikhämtning (pacing). | Fas 1 |
 | A5 | Vilka ETF:er en EU-privatperson får köpa (PRIIPs/KID). | Fas 1 |
@@ -24,6 +24,8 @@ flyttas då till "Verifierat" med datum och källa.
 | A15 | Att en andra användare utan uttagsrätt går att skapa på ett privat ISK-konto. | Före riktig handel |
 | A16 | Hur IBKR hanterar bracket-barnens antal när köpet delfylls och resten avbryts. Jarvis räknar ändå bara skydd som är aktivt (köpt minus sålt), så felet kan inte ge oskyddade positioner, men beteendet ska ses i papper. | Provkörning mot papperskontot |
 | A17 | Att `reqExecutions` ger dagens fyllnader efter en omstart och att provisionen alltid kommer. | Provkörning mot papperskontot |
+| A18 | Att IBKR:s branschfält (`industry`) är en rimlig sektor för sektorgränsen på 25 %. | Fas 1 |
+| A19 | Att `ib_async` kräver tzdata 2025.3 (det sänkte paketet från 2026.6). Svensk och amerikansk sommartid påverkas inte av skillnaden. | Fas 1 |
 | A12 | IBKR:s tider för daglig omstart och intervallet för ny 2FA-inloggning (specen anger "normalt en gång i veckan"). | Fas 0.5 |
 
 ## Verifierat

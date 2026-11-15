@@ -3,9 +3,9 @@
 Allt här är gratis. Räkna med ungefär en timme. Skriv aldrig lösenord i chatten med Claude –
 de ska bara in i filen `.env` på servern (steg 5).
 
-**Läget just nu:** steg 1–5 kan du göra i dag. Steg 6 (att Jarvis faktiskt loggar in och
-handlar i papper) fungerar först när Jarvis IBKR-koppling är byggd och testad. Gatewayn i
-steg 5 är inte provkörd på Oracles servertyp ännu.
+**Läget just nu:** Jarvis IBKR-koppling är byggd och testad mot en simulerad gateway, men
+inte provkörd mot en riktig IB Gateway eller på Oracles servertyp. Första starten på servern
+är därför också den första riktiga provkörningen; Claude hjälper dig läsa loggarna.
 
 ## Steg 1 – Papperskontot hos IBKR
 Papperskontot har ett **eget användarnamn och lösenord**, skilt från ditt vanliga.
@@ -80,7 +80,7 @@ git clone -b claude/new-session-jn5c19 https://github.com/adam991299/app-.git
 cd app-/jarvis && scripts/init-env.sh
 ```
 
-3. Lägg in papperskontots inloggning i `.env`:
+3. Lägg in papperskontots inloggning och kontonummer (från steg 1) i `.env`:
 
 ```bash
 nano .env
@@ -91,6 +91,7 @@ Fyll i de två raderna, spara med Ctrl+O och avsluta med Ctrl+X:
 ```
 IBKR_PAPER_USERNAME=ditt-pappersanvändarnamn
 IBKR_PAPER_PASSWORD=ditt-papperslösenord
+IBKR_PAPER_ACCOUNT=DU1234567
 ```
 
 4. Starta allt:

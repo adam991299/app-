@@ -68,12 +68,7 @@ class FakeIB:
     cancelled: list[Order] = field(default_factory=list)
 
     async def connectAsync(
-        self,
-        host: str,
-        port: int,
-        clientId: int,
-        timeout: float,
-        account: str,
+        self, host: str, port: int, *, clientId: int, timeout: float | None, account: str
     ) -> None:
         if self.refuse_connect:
             raise ConnectionRefusedError("gateway down")
@@ -118,7 +113,7 @@ class FakeIB:
             if trade.order.orderId == order.orderId:
                 trade.orderStatus.status = "Cancelled"
 
-    async def reqExecutionsAsync(self) -> list[IbFill]:
+    async def reqExecutionsAsync(self, execFilter: Any = None) -> list[IbFill]:
         return self.executions
 
     async def qualifyContractsAsync(self, *contracts: Contract) -> list[Contract | None]:

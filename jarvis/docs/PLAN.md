@@ -74,7 +74,6 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
       återhämtning, avstämning, larm, höjning av stopp (D15); 100 % täckning
 - [x] Trendföljningsstrategi på dagsbarer: Donchian-utbrott, ATR-stopp, glidande stopp
       (regler och tester; ännu inte kopplad till data eller validerad, se D18)
-- [ ] Körslinga som matar strategin med dagsbarer och skickar signalerna till orderhanteringen
 - [x] Hemskärm enligt §9.1: orb, status, kontovärde, idag, marknader, innehav, affärer,
       tomma lägen, felläge; skärmdumpar i `docs/screenshots/` (med exempeldata)
 - [x] API-tjänsten som ger hemskärmen riktig data (`/status`, `/portfolio`, `/trades`, `/today`),
@@ -87,8 +86,11 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
       order-ID, idempotens, statusmappning, flytt av stopp, fyllnader först när provisionen är
       känd; prispriser avrundas till tillåtna steg (D20). Testad mot fejkad gateway.
 - [ ] Provkörning mot riktig IB Gateway och Adams papperskonto — **kräver servern**
-- [ ] Körslinga (execution-engine-tjänsten): anslut med återförsök, återhämtning,
-      avstämning varje minut, kurser från IBKR, stopphöjning efter stängning
+- [x] Körslinga (execution-engine-tjänsten): anslut med återförsök, återhämtning,
+      avstämning varje minut, klockkontroll mot NTP, kurser i realtid från IBKR (annars ingen
+      kurs), dagsdata klippt vid senaste stängda dag, stopphöjning efter stängning,
+      köpsignaler loggas men skickas inte förrän en validerad förväntad vinst finns (D18)
+- [ ] Larm som push och e-post (notistjänsten); i dag hamnar larmen i loggen
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
 - [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)
 

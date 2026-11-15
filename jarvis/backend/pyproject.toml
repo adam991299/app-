@@ -49,6 +49,7 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "DTZ", "P
 "tests/**" = ["S101"]
 # The fake gateway mirrors ib_async's camelCase method names.
 "tests/broker/test_ibkr.py" = ["S101", "N802", "N803"]
+"tests/marketdata/test_ibkr_market.py" = ["S101", "N802", "N803"]
 
 [tool.mypy]
 strict = true

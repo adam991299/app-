@@ -1,0 +1,23 @@
+# Amerikanska aktier som den tunna versionen följer (beslut D21). Stora, mycket likvida
+# bolag i olika sektorer. Sektorn hämtas från IBKR. Listan byts mot universumfiltret i Fas 1.
+symbols:
+  - AAPL
+  - MSFT
+  - NVDA
+  - AMZN
+  - GOOGL
+  - META
+  - JPM
+  - V
+  - XOM
+  - CVX
+  - JNJ
+  - UNH
+  - LLY
+  - PG
+  - KO
+  - WMT
+  - COST
+  - HD
+  - CAT
+  - LIN
