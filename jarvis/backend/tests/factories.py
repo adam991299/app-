@@ -47,14 +47,14 @@ def buy(
         side=Side.BUY,
         quantity=quantity,
         limit_price=Decimal(limit),
+        estimated_cost=Decimal(cost),
         stop_price=None if stop is None else Decimal(stop),
         expected_edge=None if edge is None else Decimal(edge),
-        estimated_cost=Decimal(cost),
     )
 
 
 def sell(inst: Instrument | None = None, quantity: int = 10, limit: str = "100") -> OrderProposal:
-    return OrderProposal(inst or instrument(), Side.SELL, quantity, Decimal(limit))
+    return OrderProposal(inst or instrument(), Side.SELL, quantity, Decimal(limit), Decimal(1))
 
 
 def session(
@@ -73,6 +73,7 @@ def context(
     cash: str | None = None,
     positions: Mapping[str, Position] | None = None,
     pending: Sequence[PendingOrder] = (),
+    protected: Mapping[str, int] | None = None,
     quotes: Sequence[Quote] | None = None,
     market: MarketSession | None = None,
     breakers: BreakerStatus = ACTIVE,
@@ -85,6 +86,7 @@ def context(
         account=Account(Decimal(equity), Decimal(cash if cash is not None else equity)),
         positions=positions or {},
         pending=pending,
+        protected=protected or {},
         quotes={q.symbol: q for q in (quotes if quotes is not None else [quote()])},
         session=market or session(),
         breakers=breakers,

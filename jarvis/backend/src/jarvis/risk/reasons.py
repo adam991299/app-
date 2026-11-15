@@ -20,10 +20,12 @@ class Reason(StrEnum):
     MISSING_STOP = "missing_stop"
     INVALID_STOP = "invalid_stop"
     SHORT_SELLING_NOT_ALLOWED = "short_selling_not_allowed"
+    COVERED_BY_STOP = "covered_by_stop"
     NO_EQUITY = "no_equity"
     # Market data and timing
     MISSING_QUOTE = "missing_quote"
     STALE_QUOTE = "stale_quote"
+    FUTURE_QUOTE = "future_quote"
     PRICE_DEVIATION = "price_deviation"
     MARKET_CLOSED = "market_closed"
     OUTSIDE_TRADING_WINDOW = "outside_trading_window"
@@ -66,9 +68,13 @@ MESSAGES_SV: dict[Reason, str] = {
     Reason.SHORT_SELLING_NOT_ALLOWED: (
         "Ordern skulle sälja mer än innehavet. Blankning är inte tillåten."
     ),
+    Reason.COVERED_BY_STOP: (
+        "Aktierna skyddas redan av en stopporder hos mäklaren. Den tas bort före försäljningen."
+    ),
     Reason.NO_EQUITY: "Kontot har inget kapital att handla med.",
     Reason.MISSING_QUOTE: "Det finns ingen aktuell kurs.",
     Reason.STALE_QUOTE: "Kursen är för gammal.",
+    Reason.FUTURE_QUOTE: "Kursens tidsstämpel ligger i framtiden.",
     Reason.PRICE_DEVIATION: "Limitpriset avviker för mycket från senaste kurs.",
     Reason.MARKET_CLOSED: "Marknaden är stängd.",
     Reason.OUTSIDE_TRADING_WINDOW: "Inga nya affärer precis efter öppning eller före stängning.",

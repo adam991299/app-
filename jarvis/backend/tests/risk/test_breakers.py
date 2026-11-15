@@ -15,8 +15,19 @@ HEALTHY = SystemHealth(True, 0, 0.0, positions_reconciled=True)
 FREE = Controls(paused=False, kill_switch_engaged=False)
 
 
-def marks(current: str, *, day: str = "100", week: str = "100", peak: str = "100") -> EquityMarks:
-    return EquityMarks(Decimal(day), Decimal(week), Decimal(peak), Decimal(current))
+def marks(
+    current: str,
+    *,
+    day: str = "100",
+    week: str = "100",
+    peak: str = "100",
+    day_low: str | None = None,
+    week_low: str | None = None,
+) -> EquityMarks:
+    low = min(Decimal(current), Decimal(day))
+    d_low = Decimal(day_low) if day_low is not None else low
+    w_low = Decimal(week_low) if week_low is not None else min(d_low, Decimal(week))
+    return EquityMarks(Decimal(day), d_low, Decimal(week), w_low, Decimal(peak), Decimal(current))
 
 
 def test_healthy_system_is_active() -> None:
@@ -116,13 +127,45 @@ def test_all_reasons_are_reported_most_severe_state_wins() -> None:
     assert status.kill_switch_should_engage
 
 
+def test_daily_limit_holds_for_the_rest_of_the_day() -> None:
+    recovered = marks("99", day_low="97.9")  # fell 2.1 %, then recovered to -1 %
+    status = evaluate(recovered, HEALTHY, FREE, LIMITS)
+    assert status.state is TradingState.NO_NEW_TRADES
+    assert status.reasons == (Reason.DAILY_LOSS_LIMIT,)
+
+
+def test_weekly_limit_holds_until_next_week() -> None:
+    # Monday fell 4.1 %; today (new day) the account is up, but the week's low remains
+    status = evaluate(
+        marks("97", day="96.5", week="100", day_low="96.5", week_low="95.9"), HEALTHY, FREE, LIMITS
+    )
+    assert status.state is TradingState.CLOSING_ONLY
+    assert status.reasons == (Reason.WEEKLY_LOSS_LIMIT,)
+
+
 @pytest.mark.parametrize(
-    ("day", "week", "peak", "current"),
-    [("0", "1", "1", "1"), ("1", "0", "1", "1"), ("1", "1", "0", "0"), ("1", "1", "1", "2")],
+    ("day", "day_low", "week", "week_low", "peak", "current", "match"),
+    [
+        ("0", "0", "1", "0", "1", "1", "positive"),
+        ("1", "1", "0", "0", "1", "1", "positive"),
+        ("1", "0", "1", "0", "0", "0", "positive"),
+        ("1", "1", "1", "1", "1", "2", "peak"),
+        ("1", "1.5", "2", "1", "2", "1.5", "day_low"),
+        ("2", "1", "2", "1.5", "2", "1.5", "week_low"),
+    ],
 )
-def test_equity_marks_validation(day: str, week: str, peak: str, current: str) -> None:
-    with pytest.raises(ValueError, match=r"positive|peak"):
-        EquityMarks(Decimal(day), Decimal(week), Decimal(peak), Decimal(current))
+def test_equity_marks_validation(
+    day: str, day_low: str, week: str, week_low: str, peak: str, current: str, match: str
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        EquityMarks(
+            Decimal(day),
+            Decimal(day_low),
+            Decimal(week),
+            Decimal(week_low),
+            Decimal(peak),
+            Decimal(current),
+        )
 
 
 @given(
@@ -133,7 +176,9 @@ def test_no_new_positions_whenever_any_loss_limit_is_hit(peak: Decimal, drop: De
     current = peak * (1 - drop)
     if current <= 0:
         return
-    status = evaluate(EquityMarks(peak, peak, peak, current), HEALTHY, FREE, LIMITS)
+    status = evaluate(
+        EquityMarks(peak, current, peak, current, peak, current), HEALTHY, FREE, LIMITS
+    )
     if drop >= Decimal("0.02"):
         assert not status.state.allows_new_positions
     else:

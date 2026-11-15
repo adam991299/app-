@@ -37,6 +37,12 @@ class Instrument:
             raise ValueError("instrument needs a symbol and an exchange")
         if len(self.currency) != 3 or not self.currency.isupper():
             raise ValueError(f"currency must be an ISO 4217 code, got {self.currency!r}")
+        if self.sector is not None:
+            # "Technology" and " technology" must count against the same sector limit.
+            normalised = self.sector.strip().casefold()
+            if not normalised:
+                raise ValueError("sector must not be blank")
+            object.__setattr__(self, "sector", normalised)
 
 
 @dataclass(frozen=True, slots=True)

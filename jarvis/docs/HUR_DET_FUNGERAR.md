@@ -46,8 +46,13 @@ Ett köp godkänns bara om **allt** detta stämmer:
 Order som redan ligger hos mäklaren räknas som om de vore fyllda. Två likadana signaler kan
 därför aldrig tillsammans ta Jarvis förbi en gräns.
 
-Att **sälja** det Jarvis äger är tillåtet i alla lägen utom "Stoppad". Jarvis kan aldrig
-sälja mer än den äger — det skulle vara blankning, och det är inte tillåtet.
+Att **sälja** det Jarvis äger är tillåtet i alla lägen utom "Stoppad", och räknas inte mot
+ordertaket. Jarvis kan aldrig sälja mer än den äger — det skulle vara blankning, och det är
+inte tillåtet. Aktier som skyddas av en stopporder hos mäklaren säljs först när stoppen har
+tagits bort, så att en gammal stopp aldrig kan sälja aktier som köpts senare.
+
+Dagsstoppet gäller resten av dagen och veckostoppet resten av veckan, även om kontot hinner
+återhämta sig.
 
 ### Hur stor blir affären?
 

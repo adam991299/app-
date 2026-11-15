@@ -5,8 +5,12 @@ allowed in every state except HALTED, because it lowers risk. Opening must pass 
 check. All failing checks are reported, not just the first, so the log says exactly why.
 
 Working orders (``pending``) are counted as if filled, so two identical signals can never
-together exceed a limit. Protective stop and target orders attached to positions are not
-``pending``; they are part of the position they protect.
+together exceed a limit. Protective stop and target orders are not ``pending``; the shares
+they cover are given in ``protected``. A sell may not touch covered shares: the stop must
+be cancelled first, otherwise the stop could later sell shares bought afterwards.
+
+Closing orders are exempt from the order-rate limits (they can only reduce risk and can
+never exceed the position), but still need a fresh quote and a sane limit price.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from jarvis.config.settings import Risk
 from jarvis.domain import Account, AssetClass, Instrument, Position, Quote, Side
 from jarvis.risk.breakers import BreakerStatus
 from jarvis.risk.reasons import Reason
-from jarvis.risk.sizing import gap_fraction, position_cap_fraction
+from jarvis.risk.sizing import gap_fraction, gap_loss_per_unit, position_cap_fraction
 from jarvis.risk.units import fraction
 
 
@@ -30,9 +34,9 @@ class OrderProposal:
     side: Side
     quantity: int
     limit_price: Decimal
+    estimated_cost: Decimal  # commission + spread + slippage, base currency; never implicit
     stop_price: Decimal | None = None
     expected_edge: Decimal | None = None  # expected net gain in base currency
-    estimated_cost: Decimal = Decimal(0)  # commission + spread + slippage, base currency
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +68,7 @@ class RiskContext:
     account: Account
     positions: Mapping[str, Position]
     pending: Sequence[PendingOrder]
+    protected: Mapping[str, int]  # shares covered by working broker-side stops, per symbol
     quotes: Mapping[str, Quote]
     session: MarketSession
     breakers: BreakerStatus
@@ -104,24 +109,30 @@ class RiskEngine:
             reasons.append(Reason.INVALID_PRICE)
         return reasons
 
-    def _market_checks(self, order: OrderProposal, ctx: RiskContext) -> list[Reason]:
+    def _rate_checks(self, ctx: RiskContext) -> list[Reason]:
         safety = self._risk.order_safety
         reasons: list[Reason] = []
-        if not ctx.session.is_open(ctx.now):
-            reasons.append(Reason.MARKET_CLOSED)
         if ctx.orders_last_minute >= safety.max_orders_per_minute:
             reasons.append(Reason.ORDER_RATE_MINUTE)
         if ctx.orders_today >= safety.max_orders_per_day:
             reasons.append(Reason.ORDER_RATE_DAY)
+        return reasons
+
+    def _market_checks(self, order: OrderProposal, ctx: RiskContext) -> list[Reason]:
+        breakers = self._risk.circuit_breakers
+        reasons: list[Reason] = []
+        if not ctx.session.is_open(ctx.now):
+            reasons.append(Reason.MARKET_CLOSED)
         quote = ctx.quotes.get(order.instrument.symbol)
         if quote is None:
             reasons.append(Reason.MISSING_QUOTE)
             return reasons
-        max_age = timedelta(seconds=self._risk.circuit_breakers.max_quote_age_seconds)
-        if ctx.now - quote.at > max_age:
+        if quote.at - ctx.now > timedelta(seconds=breakers.max_clock_drift_seconds):
+            reasons.append(Reason.FUTURE_QUOTE)
+        if ctx.now - quote.at > timedelta(seconds=breakers.max_quote_age_seconds):
             reasons.append(Reason.STALE_QUOTE)
         deviation = abs(order.limit_price - quote.last) / quote.last
-        if deviation > fraction(safety.max_price_deviation_pct):
+        if deviation > fraction(self._risk.order_safety.max_price_deviation_pct):
             reasons.append(Reason.PRICE_DEVIATION)
         return reasons
 
@@ -136,8 +147,11 @@ class RiskEngine:
         already_selling = sum(
             p.quantity for p in ctx.pending if p.side is Side.SELL and p.instrument.symbol == symbol
         )
-        if order.quantity > held - already_selling:
+        free = held - already_selling
+        if order.quantity > free:
             reasons.append(Reason.SHORT_SELLING_NOT_ALLOWED)
+        elif order.quantity > free - ctx.protected.get(symbol, 0):
+            reasons.append(Reason.COVERED_BY_STOP)
         reasons.extend(self._market_checks(order, ctx))
         return reasons
 
@@ -147,6 +161,7 @@ class RiskEngine:
         reasons: list[Reason] = []
         if not ctx.breakers.state.allows_new_positions:
             reasons.extend(ctx.breakers.reasons)
+        reasons.extend(self._rate_checks(ctx))
         reasons.extend(self._market_checks(order, ctx))
         reasons.extend(self._window_check(ctx))
         reasons.extend(self._stop_and_edge(order))
@@ -203,9 +218,11 @@ class RiskEngine:
         position_value = exp.by_symbol[instrument.symbol]
         if position_value > equity * position_cap_fraction(instrument, risk):
             reasons.append(Reason.POSITION_LIMIT)
-        if position_value * gap_fraction(instrument, risk) > equity * fraction(
-            risk.gap.max_gap_loss_pct
-        ):
+        gap = gap_fraction(instrument, risk)
+        stop = order.stop_price if order.stop_price is not None else Decimal(0)
+        order_gap_loss = order.quantity * gap_loss_per_unit(order.limit_price, stop, gap) * exp.fx
+        gap_loss = (position_value - exp.order_value) * gap + order_gap_loss
+        if gap_loss > equity * fraction(risk.gap.max_gap_loss_pct):
             reasons.append(Reason.GAP_LOSS_LIMIT)
 
         if instrument.asset_class in (AssetClass.EQUITY, AssetClass.ETF):

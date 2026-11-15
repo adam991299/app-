@@ -1,7 +1,9 @@
 """Circuit breakers, kill switch and system-health stops (spec §7, §11).
 
 ``evaluate`` is pure: it reads equity marks, system health and Adam's controls and
-returns the trading state. Latching the kill switch (and requiring Adam to restart) is
+returns the trading state. The daily and weekly limits hold for the rest of the day or
+week because they compare the *lowest* equity seen since the day or week began (which the
+caller tracks), not the current value. Latching the kill switch (and requiring Adam to restart) is
 the caller's job: when ``kill_switch_should_engage`` is true the caller must persist
 ``Controls.kill_switch_engaged = True``. Resetting it re-bases the equity peak, so the
 same drawdown does not trip it again immediately.
@@ -39,10 +41,13 @@ class TradingState(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class EquityMarks:
-    """Net liquidation value at the reference points, in base currency."""
+    """Net liquidation value in base currency. ``day_low`` and ``week_low`` are the lowest
+    values seen since the day and week started (including the start and current values)."""
 
     day_start: Decimal
+    day_low: Decimal
     week_start: Decimal
+    week_low: Decimal
     peak: Decimal
     current: Decimal
 
@@ -51,6 +56,10 @@ class EquityMarks:
             raise ValueError("reference equity values must be positive")
         if self.current > self.peak:
             raise ValueError("current equity cannot exceed the recorded peak")
+        if self.day_low > min(self.day_start, self.current):
+            raise ValueError("day_low must not exceed the day's start or current equity")
+        if self.week_low > min(self.week_start, self.day_low):
+            raise ValueError("week_low must not exceed the week's start or the day's low")
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,8 +111,8 @@ def evaluate(
     if drawdown_hit:
         kill.append(Reason.KILL_SWITCH_DRAWDOWN)
 
-    weekly = _loss_fraction(marks.week_start, marks.current) >= fraction(limits.weekly_loss_pct)
-    daily = _loss_fraction(marks.day_start, marks.current) >= fraction(limits.daily_loss_pct)
+    weekly = _loss_fraction(marks.week_start, marks.week_low) >= fraction(limits.weekly_loss_pct)
+    daily = _loss_fraction(marks.day_start, marks.day_low) >= fraction(limits.daily_loss_pct)
 
     layers: list[tuple[TradingState, list[Reason]]] = [
         (TradingState.HALTED, halted),

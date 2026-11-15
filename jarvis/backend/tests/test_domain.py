@@ -18,6 +18,12 @@ def test_instrument_validation(symbol: str, exchange: str, currency: str) -> Non
         Instrument(symbol, exchange, currency, AssetClass.EQUITY)
 
 
+def test_sector_is_normalised() -> None:
+    assert instrument(sector=" Technology ").sector == "technology"
+    with pytest.raises(ValueError, match="blank"):
+        instrument(sector="  ")
+
+
 @pytest.mark.parametrize(("last", "fx"), [("0", "1"), ("-1", "1"), ("10", "0")])
 def test_quote_needs_positive_prices(last: str, fx: str) -> None:
     with pytest.raises(ValueError, match="positive"):

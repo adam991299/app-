@@ -180,6 +180,37 @@ def test_order_rate_limits() -> None:
     assert reasons(buy(), orders_last_minute=9, orders_today=49) == ()
 
 
+def test_closing_is_not_rate_limited() -> None:
+    held = {"AAPL": position(instrument(), 10)}
+    assert reasons(sell(), positions=held, orders_last_minute=99, orders_today=999) == ()
+
+
+def test_future_dated_quote_is_rejected() -> None:
+    assert reasons(buy(), quotes=[quote(age_s=-2)]) == (Reason.FUTURE_QUOTE,)
+    assert reasons(buy(), quotes=[quote(age_s=-1)]) == ()
+
+
+def test_sell_may_not_touch_shares_covered_by_a_broker_stop() -> None:
+    held = {"AAPL": position(instrument(), 10)}
+    assert reasons(sell(), positions=held, protected={"AAPL": 10}) == (Reason.COVERED_BY_STOP,)
+    assert reasons(sell(quantity=4), positions=held, protected={"AAPL": 6}) == ()
+    assert reasons(sell(quantity=5), positions=held, protected={"AAPL": 6}) == (
+        Reason.COVERED_BY_STOP,
+    )
+
+
+def test_sector_names_are_compared_normalised() -> None:
+    held = {f"S{i}": position(instrument(f"S{i}", sector="Technology"), 100) for i in range(2)}
+    quotes = [quote("S0"), quote("S1"), quote()]
+    order = buy(instrument(sector="technology "), quantity=51, stop="99.9")
+    assert reasons(order, positions=held, quotes=quotes) == (Reason.SECTOR_LIMIT,)
+
+
+def test_gap_loss_counts_a_stop_wider_than_the_gap() -> None:
+    # stop at 40 (60 % away) is wider than the 25 % gap scenario: 60 per share x 51 > 3 000
+    assert Reason.GAP_LOSS_LIMIT in reasons(buy(quantity=51, limit="100", stop="40"))
+
+
 # -- sizing and portfolio limits -----------------------------------------------------------
 
 
@@ -335,67 +366,60 @@ def test_all_failing_checks_are_reported() -> None:
     assert len(got) == len(set(got))
 
 
-# -- property: an approved order never breaks a limit ----------------------------------------
+# -- properties ---------------------------------------------------------------------------
 
 
-@settings(max_examples=300)
-@given(
-    quantity=st.integers(min_value=1, max_value=5000),
-    limit=st.decimals(min_value=D(1), max_value=D(1000), places=2),
-    stop_fraction=st.decimals(min_value=D("0.5"), max_value=D("0.999"), places=3),
-    fx=st.decimals(min_value=D("0.1"), max_value=D(15), places=2),
-    equity=st.decimals(min_value=D(10000), max_value=D(10**7), places=0),
-    cash_fraction=st.decimals(min_value=D(0), max_value=D(1), places=2),
-    held_qty=st.integers(min_value=0, max_value=2000),
-)
-def test_approved_buy_never_breaks_a_limit(
-    quantity: int,
-    limit: Decimal,
-    stop_fraction: Decimal,
-    fx: Decimal,
-    equity: Decimal,
-    cash_fraction: Decimal,
-    held_qty: int,
-) -> None:
-    held = {"AAPL": position(instrument(), held_qty, str(limit))} if held_qty else {}
-    order = buy(quantity=quantity, limit=str(limit), stop=str(limit * stop_fraction), cost="1")
-    ctx = context(
-        equity=str(equity),
-        cash=str(equity * cash_fraction),
-        positions=held,
-        quotes=[quote(last=str(limit), fx=str(fx))],
-    )
-    if not ENGINE.check(order, ctx).approved:
-        return
-    value = (quantity + held_qty) * limit * fx
-    assert quantity * (limit - limit * stop_fraction) * fx <= equity * D("0.0075")
-    assert value <= equity * D("0.10")
-    assert value * D("0.25") <= equity * D("0.03")
-    assert ctx.account.cash - quantity * limit * fx - 1 >= equity * D("0.05")
-
-
-@settings(max_examples=200)
+@settings(max_examples=400)
 @given(
     entry=st.decimals(min_value=D(1), max_value=D(1000), places=2),
-    stop_fraction=st.decimals(min_value=D("0.5"), max_value=D("0.99"), places=2),
-    equity=st.decimals(min_value=D(10000), max_value=D(10**7), places=0),
+    stop_fraction=st.decimals(min_value=D("0.30"), max_value=D("0.995"), places=3),
+    fx=st.decimals(min_value=D("0.1"), max_value=D(15), places=2),
+    cash=st.decimals(min_value=D(5000), max_value=D(10**7), places=0),
+    held_value=st.decimals(min_value=D(0), max_value=D(10**6), places=0),
+    held_fx=st.decimals(min_value=D("0.1"), max_value=D(15), places=2),
+    asset_class=st.sampled_from([AssetClass.EQUITY, AssetClass.ETF, AssetClass.CRYPTO]),
+    small_cap=st.booleans(),
 )
-def test_sizing_output_passes_the_engine(
-    entry: Decimal, stop_fraction: Decimal, equity: Decimal
+def test_sizing_is_exactly_the_largest_approved_quantity(
+    entry: Decimal,
+    stop_fraction: Decimal,
+    fx: Decimal,
+    cash: Decimal,
+    held_value: Decimal,
+    held_fx: Decimal,
+    asset_class: AssetClass,
+    small_cap: bool,
 ) -> None:
-    stop = entry * stop_fraction
-    reserve = equity * D("0.05")
+    """The sized quantity is approved and one more share is rejected, with an unrelated
+    holding in another currency and sector on the books."""
+    stop = (entry * stop_fraction).quantize(D("0.01"))
+    if not 0 < stop < entry:
+        return
+    other_qty = int(held_value / 100) if held_value >= 100 else 0
+    held = (
+        {"OTHER": position(instrument("OTHER", sector="utilities"), other_qty)} if other_qty else {}
+    )
+    equity = cash + other_qty * 100 * held_fx
+    sector = None if asset_class is AssetClass.CRYPTO else "unique"
+    inst = instrument("NEW", asset_class=asset_class, sector=sector, small_cap=small_cap)
+    cost = D(1)
     sized = size_position(
-        instrument=instrument(),
+        instrument=inst,
         equity=equity,
-        free_cash=equity - reserve - 1,
+        free_cash=cash - equity * D("0.05") - cost,
         entry=entry,
         stop=stop,
-        fx_to_base=D(1),
+        fx_to_base=fx,
         risk=RISK,
     )
-    if sized.quantity == 0:
-        return
-    order = buy(quantity=sized.quantity, limit=str(entry), stop=str(stop), edge="10", cost="1")
-    ctx = context(equity=str(equity), quotes=[quote(last=str(entry))])
-    assert ENGINE.check(order, ctx).approved
+    quotes = [quote("NEW", last=str(entry), fx=str(fx)), quote("OTHER", fx=str(held_fx))]
+    ctx = context(equity=str(equity), cash=str(cash), positions=held, quotes=quotes)
+    bigger = ENGINE.check(
+        buy(inst, sized.quantity + 1, str(entry), str(stop), edge="1e9", cost="1"), ctx
+    )
+    assert not bigger.approved
+    if sized.quantity > 0:
+        exact = ENGINE.check(
+            buy(inst, sized.quantity, str(entry), str(stop), edge="1e9", cost="1"), ctx
+        )
+        assert exact.approved, exact.reasons

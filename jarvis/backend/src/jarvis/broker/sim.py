@@ -5,6 +5,9 @@ brackets whose stop lives at the broker. Prices arrive through ``set_price``; or
 fill at the new price when it crosses their level, so a gap through a stop fills at the
 gap price, not at the stop (§7 "En stop-loss garanterar inte priset").
 
+Known simplification: one currency. Prices and cash are in the same unit, so currency
+conversion is not exercised here (the risk engine's fx handling is tested on its own).
+
 Failure injection for chaos tests: ``go_offline``/``go_online`` (orders keep working at
 the "broker" while Jarvis is disconnected) and ``fail_next_call``.
 """
@@ -185,6 +188,7 @@ class SimBroker:
             reserved = sum(
                 (
                     (o.view.quantity - o.view.filled_quantity) * o.level
+                    + self._commission(o.view.quantity - o.view.filled_quantity)
                     for o in self._orders.values()
                     if o.kind == "entry" and o.view.status.is_working
                 ),
@@ -197,7 +201,21 @@ class SimBroker:
         held = self._positions.get(symbol, (0, Decimal(0)))[0]
         if request.quantity > held - self._working_sell_quantity(symbol):
             return "sell exceeds position (short selling not allowed)"
+        if request.quantity > held - self._working_sell_quantity(symbol) - self._protected(symbol):
+            return "sell overlaps shares covered by a working stop; cancel the stop first"
         return None
+
+    def _protected(self, symbol: str) -> int:
+        """Shares covered by working brackets (stop and target cover the same shares)."""
+        covered = 0
+        for parent in self._orders.values():
+            if parent.kind != "entry" or parent.view.symbol != symbol:
+                continue
+            children = self._children(parent.view.client_order_id)
+            if any(not c.view.status.is_terminal for c in children):
+                sold = sum(c.view.filled_quantity for c in children)
+                covered += parent.view.filled_quantity - sold
+        return covered
 
     def _working_sell_quantity(self, symbol: str) -> int:
         return sum(

@@ -296,6 +296,8 @@ def test_day_orders_expire_but_stops_stay() -> None:
     sim = broker()
     run(sim.submit(bracket(cid="filled")))
     run(sim.submit(bracket(cid="resting", limit="90", stop="85")))
+    run(sim.submit(bracket(cid="plain", qty=5)))
+    run(sim.cancel("plain.stop"))
     run(sim.submit(exit_order(limit="120", qty=5)))
     sim.expire_day_orders()
     assert status(sim, "resting") is OrderStatus.EXPIRED
@@ -369,15 +371,45 @@ def test_exit_sells_at_or_above_limit() -> None:
     assert account.cash == D(100000) - D(1001) + D(1060) - D(1)
 
 
-def test_stop_never_sells_more_than_held() -> None:
+def test_exit_overlapping_a_working_stop_is_rejected() -> None:
     sim = broker()
-    run(sim.submit(bracket(cid="buy")))
-    run(sim.submit(exit_order(limit="100")))  # sells the position directly (stop still set)
-    sim.set_price("AAPL", D(90))
+    run(sim.submit(bracket(cid="b1")))
+    overlapping = run(sim.submit(exit_order(limit="100")))
+    assert overlapping.status is OrderStatus.REJECTED
+    assert overlapping.reject_reason is not None
+    assert "cancel the stop" in overlapping.reject_reason
+
+
+def test_old_stop_cannot_sell_shares_from_a_later_buy() -> None:
+    """Reviewer scenario: exit, re-buy, price drop. The old stop must not fire."""
+    sim = broker()
+    run(sim.submit(bracket(cid="b1")))
+    run(sim.cancel("b1.stop"))
+    run(sim.submit(exit_order(limit="100")))
+    run(sim.submit(bracket(cid="b2", stop="90")))
+    sim.set_price("AAPL", D(94))
+    assert held(sim) == 10
+    assert status(sim, "b1.stop") is OrderStatus.CANCELLED
+
+
+def test_two_brackets_on_one_symbol_each_protect_their_own_shares() -> None:
+    sim = broker()
+    run(sim.submit(bracket(cid="a", stop="95")))
+    run(sim.submit(bracket(cid="b", qty=5, stop="90")))
+    sim.set_price("AAPL", D(94))
+    assert held(sim) == 5
+    sim.set_price("AAPL", D(89))
     assert held(sim) == 0
-    stop = run(sim.order("buy.stop"))
-    assert stop is not None
-    assert stop.filled_quantity == 0
+
+
+def test_cash_reservation_includes_commission() -> None:
+    sim = broker(cash="1000")
+    sim.set_price("AAPL", D(20))
+    run(sim.submit(bracket(cid="a", qty=99, limit="10", stop="9")))  # rests: 990 + 1
+    late = run(sim.submit(bracket(cid="b", qty=1, limit="9", stop="8")))  # needs 9 + 1 > 9 left
+    assert late.status is OrderStatus.REJECTED
+    sim.set_price("AAPL", D(9))
+    assert run(sim.account()).cash >= 0
 
 
 def test_partial_exit_keeps_average_cost_and_positions_list() -> None:
@@ -412,3 +444,16 @@ def test_account_values_positions_at_cost_without_price() -> None:
     sim.set_price("AAPL", D(10))
     run(sim.submit(bracket(qty=5, limit="10", stop="9")))
     assert run(sim.account()).net_liquidation == D(1000) - D(1)
+
+
+def test_target_waits_when_it_has_sold_everything_bought_so_far() -> None:
+    sim = broker(max_fill_per_price=4)
+    run(sim.submit(bracket(tp="110")))  # entry fills 4 of 10, keeps working
+    sim.set_price("AAPL", D(111))  # target sells those 4
+    sim.set_price("AAPL", D(112))  # nothing more to sell yet: no empty fill
+    tp = run(sim.order("o1.tp"))
+    assert tp is not None
+    assert tp.filled_quantity == 4
+    assert held(sim) == 0
+    assert len(run(sim.fills(NOW))) == 2
+    assert status(sim, "o1") is OrderStatus.PARTIALLY_FILLED

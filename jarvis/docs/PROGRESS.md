@@ -2,6 +2,38 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-15 — Fas 0.5 påbörjad, och "0 kr"-beslutet
+
+**Adams svar:** bor i Sverige (tidszon Europe/Stockholm, redan standard), har ett IBKR-konto,
+och Jarvis ska inte kosta något. Beslut D9 beskriver hur det blir 0 kr i fasta kostnader
+och vad som inte går att få gratis.
+
+**Gjort**
+- `domain/`: delade typer; pengar alltid `Decimal`; sektorer normaliseras.
+- `risk/`: positionsstorlek, kontroll före varje order (alla §7-gränser som har data i dag),
+  circuit breakers som håller dag/vecka, kill switch, hälsostopp; skäl på svenska.
+- `broker/`: `BrokerAdapter` och `SimBroker` (kontantkonto, bracket med stopp hos mäklaren,
+  delfyllnader, idempotenta order-ID, felinjektion).
+- `markets/`: börskalender med helgdagar, halvdagar och sommartid.
+- CI kräver 100 % täckning i `risk/` och `broker/`.
+
+**Verifierat**
+- 234 tester godkända; 100 % täckning i `risk/` och `broker/`; mypy strict och ruff utan
+  anmärkningar; varningar räknas som fel.
+- Egenskapstest: storleken från `size_position` godkänns alltid av risk-motorn, och en aktie
+  till avvisas alltid — med ett annat innehav i annan valuta och sektor på kontot.
+- Sommartid: testat att USA:s öppning ligger 14:30 svensk tid under veckorna i mars då USA
+  bytt till sommartid men inte Sverige, och 15:30 annars.
+
+**Granskning (separat agent)** hittade fyra fel, alla rättade med test (D11): dagsstoppet
+släppte när kontot återhämtade sig; en sälj kunde överlappa en stopp hos mäklaren; en gammal
+stopp kunde sälja aktier från ett senare köp; den simulerade mäklaren kunde ge negativ kassa.
+Dessutom: kurser med framtida tidsstämpel avvisas, gap-scenariot räknar med en stopp som
+ligger längre bort än gapet, och kostnaden måste alltid anges.
+
+**Nästa steg:** databasschema och lagring (kill switch, paus, kontovärden, affärsjournal),
+`execution/` med avstämning, trendföljningsstrategin och hemskärmen.
+
 ## 2026-11-14 — Fas 0: plan och skelett
 
 **Gjort**

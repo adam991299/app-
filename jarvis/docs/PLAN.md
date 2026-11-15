@@ -65,21 +65,34 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
 - [x] Risk-engine: positionsstorlek, kontroller före varje order, circuit breakers,
       kill switch, hälsostopp (anslutning, fel i rad, klocka, avstämning)
 - [x] CI kräver 100 % täckning i `risk/` och `broker/`
-- [ ] Granskning av risk och broker, fynd åtgärdade
+- [x] Granskning av risk och broker, fynd åtgärdade (D11)
+- [x] Börskalender (`exchange_calendars`): öppettider, helgdagar, halvdagar, sommartid
 - [ ] Databasschema och lagring av kill switch, paus, equity-toppar och affärsjournal
 - [ ] `execution/`: order-tillståndsmaskin, idempotens vid omstart, avstämning varje minut
-- [ ] Börskalender (`exchange_calendars`) för öppettider och sommartid
 - [ ] Trendföljningsstrategi på dagsbarer (amerikanska aktier)
 - [ ] Hemskärm enligt §9.1 med status, innehav och affärer
 - [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
 - [ ] 10 handelsdagar automatisk pappershandel
 
-**Skjuts uttryckligen till Fas 5** (risk-delar som kräver data som inte finns än):
-korrelationskontroll, max affärer per vecka och årlig omsättning, daglig stresstest mot
-historiska krascher, rapportskydd, kontroll av handelsstatus (stoppad/auktion), nattläge,
-daytrading-gränser. Fram till dess handlar den tunna versionen bara en strategi på
-dagsbarer, där dessa delar har minst betydelse.
+**Skjuts uttryckligen upp** (risk-delar som kräver data eller vyer som inte finns än).
+Fram till dess handlar den tunna versionen bara en strategi på amerikanska aktier och
+dagsbarer, där dessa delar har minst betydelse:
+
+| Del (§) | Byggs i | Varför då |
+|---|---|---|
+| Korrelationskontroll (§7) | Fas 5 | Kräver historik för korrelationer (Fas 1) |
+| Max affärer per vecka och årlig omsättning (§7) | Fas 5 | Kräver affärsjournalen i databasen |
+| Daglig stresstest mot 2008, mars 2020, 2022 och flashkrascher (§7) | Fas 5 | Kräver historik |
+| Rapportskydd före rapporter (§7) | Fas 5 | Kräver rapportkalender (§4.2) |
+| Handelsstatus och auktioner (§7) | Fas 5 | Kräver IBKR-adaptern |
+| Nattläge med mindre positioner (§1.6) | Fas 5 | Specen anger inte hur mycket mindre; beslut tas då |
+| Saknad data som stopp för hela systemet (§7) | Fas 0.5, `execution/` | Hälsoövervakningen byggs där |
+| Kontroll att marknaden är påslagen i config (§3) | Fas 1 | Kräver marknadsfält per instrument |
+| Likviditetsfilter för småbolag (§3) | Fas 1 | Universumfiltret |
+| ¼ Kelly (§7) | Fas 3 | Ingen strategi använder Kelly förrän då |
+| Jarvis budget och kapitalkontrollen (§7.1) | Fas 6 | Gränserna räknas mot hela kontot tills reglagen finns, vilket är försiktigare så länge budgeten är 100 % |
+| Daytrading-gränser (§6.2.1) | Fas 3 | Daytrading-motorn |
 
 ### ⬜ Fas 1 – Data
 Kalendrar, universum, historik- och realtidsdata från IBKR Paper, datakvalitetskontroller.

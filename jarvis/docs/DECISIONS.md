@@ -4,6 +4,24 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D11. Beslut efter granskningen av risk-motorn
+- **Dags- och veckostoppet håller resten av dagen respektive veckan.** De jämför dagens och
+  veckans *lägsta* kontovärde med startvärdet, inte det nuvarande. Första versionen släppte
+  stoppet om kontot återhämtade sig samma dag (hittat av granskaren).
+- **En sälj får inte röra aktier som en stopporder hos mäklaren redan skyddar.** Stoppen
+  tas bort först, sedan säljs aktierna. Annars kunde en gammal stopp senare sälja aktier som
+  köpts efteråt. Mellan de två stegen är positionen kort oskyddad; det sker bara när Jarvis
+  ändå säljer.
+- **Stängningar räknas inte mot ordertaket per minut och dag.** De kan bara minska risken
+  och aldrig sälja mer än innehavet. Färsk kurs och rimligt limitpris krävs fortfarande.
+- **"Fler än N fel i rad" (§7):** handeln stoppas vid det 5:e felet i rad (`>= 5`).
+- **Kostnaden måste alltid anges** för en order; den har inget standardvärde, så
+  vinstkravet (minst 2× kostnaden) inte kan kringgås av misstag.
+- **Instrument identifieras med symbol** så länge bara amerikanska aktier via SMART handlas.
+  I Fas 1, när flera börser tillkommer, byts nyckeln till IBKR:s kontrakts-ID, så att samma
+  symbol på två börser aldrig blandas ihop.
+- **SimBroker har en valuta.** Valutaomräkningen testas i risk-motorn för sig.
+
 ### D9. Jarvis ska kosta 0 kr i fasta kostnader (Adams krav)
 Adam: "Detta ska inte kosta något alls." Specen förutsätter en betald VPS, domän,
 marknadsdata och Claude API. Så här blir det gratis, och det här går **inte** att få gratis:
