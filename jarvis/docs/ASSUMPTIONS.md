@@ -26,6 +26,7 @@ flyttas då till "Verifierat" med datum och källa.
 | A17 | Att `reqExecutions` ger dagens fyllnader efter en omstart och att provisionen alltid kommer. | Provkörning mot papperskontot |
 | A18 | Att IBKR:s branschfält (`industry`) är en rimlig sektor för sektorgränsen på 25 %. | Fas 1 |
 | A19 | Att `ib_async` kräver tzdata 2025.3 (det sänkte paketet från 2026.6). Svensk och amerikansk sommartid påverkas inte av skillnaden. | Fas 1 |
+| A20 | Att IBKR:s exekveringstider utan tidszon är UTC, att `reqExecutions`/avslutade order räcker längre bak än innevarande dag, att papperskontot har marknadsdatadelning påslagen, och att kontots basvaluta är SEK. | Provkörning mot papperskontot |
 | A12 | IBKR:s tider för daglig omstart och intervallet för ny 2FA-inloggning (specen anger "normalt en gång i veckan"). | Fas 0.5 |
 
 ## Verifierat

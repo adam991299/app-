@@ -9,8 +9,14 @@ How Jarvis's concepts map onto IBKR:
 - Day entries that expire unfilled show up as cancelled at IBKR.
 - Orders and fills without an ``orderRef`` were not made by Jarvis; they are reported with
   an ``ibkr-<permId>`` id so reconciliation flags them.
-- A fill is only reported once IBKR has sent its commission, so the cost is never booked
-  as zero (fills are booked once and never updated).
+- Fills are read from ib_async's own fill store (``ib.fills()``), which is keyed by execId
+  and receives the commission when IBKR sends it; ``reqExecutions`` only refreshes that
+  store (its own return values carry empty commission reports). A fill is reported once its
+  commission is known, so the cost is never booked as zero. A corrected execution
+  (``….01`` → ``….02``) replaces the earlier version under the same base id.
+- Orders loaded from earlier sessions carry their fill in ``order.filledQuantity`` only.
+- ``ValidationError`` is a *warning* on a live order (e.g. code 399, "not placed until the
+  market opens" after a stop is moved out of hours), not a rejection.
 
 Every call has a timeout. A lost or slow connection raises ``BrokerUnavailableError``; a
 refusal (unknown order, bad price, unknown contract) raises ``BrokerError``.
@@ -21,7 +27,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol, TypeVar
 
@@ -50,9 +56,11 @@ _ACTIVE_UNFILLED = {
     "Submitted",
     "ApiUpdate",
     "PendingCancel",
+    "ValidationError",
 }
 _CANCELLED = {"Cancelled", "ApiCancelled"}
-_REJECTED = {"Inactive", "ValidationError"}
+_REJECTED = {"Inactive"}
+_UNSET = 1e300  # ib_async marks unset doubles with a huge sentinel
 _SETTLING = {"PendingSubmit", "ApiPending", "PendingCancel"}
 
 
@@ -69,9 +77,14 @@ class IbClient(Protocol):
         clientId: int,  # noqa: N803
         timeout: float | None,
         account: str,
+        raiseSyncErrors: bool,  # noqa: N803
     ) -> Awaitable[Any]: ...
 
     def disconnect(self) -> Any: ...
+
+    def fills(self) -> list[IbFill]: ...
+
+    def reqMarketDataType(self, marketDataType: int) -> None: ...  # noqa: N802,N803
 
     def isConnected(self) -> bool: ...  # noqa: N802
 
@@ -119,9 +132,9 @@ class IbkrBroker:
 
     # -- plumbing ------------------------------------------------------------------------
 
-    async def _wait(self, awaitable: Awaitable[T]) -> T:
+    async def _wait(self, awaitable: Awaitable[T], timeout: float | None = None) -> T:
         try:
-            return await asyncio.wait_for(awaitable, self._s.timeout_seconds)
+            return await asyncio.wait_for(awaitable, timeout or self._s.timeout_seconds)
         except (TimeoutError, ConnectionError, OSError) as exc:
             raise BrokerUnavailableError(f"IBKR did not answer: {exc!r}") from exc
 
@@ -139,6 +152,9 @@ class IbkrBroker:
     # -- connection --------------------------------------------------------------------
 
     async def connect(self) -> None:
+        """Connect and load positions, open and completed orders and today's executions.
+        Each startup request has its own timeout; an incomplete load is a failed connect
+        (``raiseSyncErrors``), because order idempotency depends on knowing every order."""
         if self._ib.isConnected():
             return
         await self._wait(
@@ -148,8 +164,11 @@ class IbkrBroker:
                 clientId=self._s.client_id,
                 timeout=self._s.timeout_seconds,
                 account=self._s.account,
-            )
+                raiseSyncErrors=True,
+            ),
+            timeout=self._s.timeout_seconds * 8,
         )
+        self._ib.reqMarketDataType(1)  # live only: no silent fallback to delayed quotes
 
     async def disconnect(self) -> None:
         self._ib.disconnect()
@@ -205,6 +224,10 @@ class IbkrBroker:
         self._guard()
         existing = self._find(request.client_order_id)
         if existing is not None:
+            if request.stop_price is not None and self._find(request.stop_order_id) is None:
+                raise BrokerError(
+                    f"bracket {request.client_order_id} exists without its stop; not resent"
+                )
             view = _view(existing)
             if (view.symbol, view.side, view.quantity, view.limit_price) != (
                 request.instrument.symbol,
@@ -225,11 +248,15 @@ class IbkrBroker:
         contract = qualified[0]
 
         action = "BUY" if request.side is Side.BUY else "SELL"
+        try:
+            ids = [self._ib.client.getReqId() for _ in range(3)]
+        except (ConnectionError, OSError) as exc:
+            raise BrokerUnavailableError(f"connection lost: {exc!r}") from exc
         parent = LimitOrder(
             action,
             request.quantity,
             float(request.limit_price),
-            orderId=self._ib.client.getReqId(),
+            orderId=ids[0],
             orderRef=request.client_order_id,
             tif="DAY",
             account=self._s.account,
@@ -242,7 +269,7 @@ class IbkrBroker:
                     "SELL",
                     request.quantity,
                     float(request.take_profit_price),
-                    orderId=self._ib.client.getReqId(),
+                    orderId=ids[1],
                     parentId=parent.orderId,
                     orderRef=request.take_profit_order_id,
                     tif="GTC",
@@ -256,7 +283,7 @@ class IbkrBroker:
                     "SELL",
                     request.quantity,
                     float(request.stop_price),
-                    orderId=self._ib.client.getReqId(),
+                    orderId=ids[2],
                     parentId=parent.orderId,
                     orderRef=request.stop_order_id,
                     tif="GTC",
@@ -264,7 +291,10 @@ class IbkrBroker:
                     transmit=True,  # the last child sends the whole bracket
                 )
             )
-        trades = [self._ib.placeOrder(contract, order) for order in orders]
+        try:
+            trades = [self._ib.placeOrder(contract, order) for order in orders]
+        except (ConnectionError, OSError) as exc:
+            raise BrokerUnavailableError(f"connection lost while placing: {exc!r}") from exc
         await self._settle(trades[0], lambda t: t.orderStatus.status not in _SETTLING)
         return _view(trades[0])
 
@@ -274,7 +304,10 @@ class IbkrBroker:
         if trade is None:
             raise BrokerError(f"unknown order {client_order_id}")
         if not trade.isDone():
-            self._ib.cancelOrder(trade.order)
+            try:
+                self._ib.cancelOrder(trade.order)
+            except (ConnectionError, OSError) as exc:
+                raise BrokerUnavailableError(f"connection lost: {exc!r}") from exc
             await self._settle(trade, lambda t: t.isDone())
         return _view(trade)
 
@@ -287,32 +320,64 @@ class IbkrBroker:
             raise BrokerError(f"stop {client_order_id} is no longer working")
         if stop_price <= 0 or not on_tick(stop_price):
             raise BrokerError("stop price must be positive and on a valid tick")
+        previous = trade.order.auxPrice
         trade.order.auxPrice = float(stop_price)
-        self._ib.placeOrder(trade.contract, trade.order)  # same orderId: a modification
+        try:
+            self._ib.placeOrder(trade.contract, trade.order)  # same orderId: a modification
+        except (ConnectionError, OSError) as exc:
+            trade.order.auxPrice = previous
+            raise BrokerUnavailableError(f"connection lost: {exc!r}") from exc
         await self._settle(trade, lambda t: t.orderStatus.status not in _SETTLING)
+        if trade.orderStatus.status in _CANCELLED:
+            # ib_async marks an order cancelled when IBKR answers a modify with an error.
+            # Whether the old stop still works is unknown; reconciliation will not count
+            # it, so the position shows as unprotected and trading halts with an alert.
+            trade.order.auxPrice = previous
+            messages = [entry.message for entry in trade.log if entry.message]
+            raise BrokerError(
+                f"IBKR refused the stop change: {messages[-1] if messages else 'no reason'}"
+            )
         return _view(trade)
 
     async def fills(self, since: datetime) -> tuple[Fill, ...]:
         self._guard()
-        found = await self._wait(self._ib.reqExecutionsAsync())
+        await self._wait(self._ib.reqExecutionsAsync())  # refreshes ib.fills() below
+        latest: dict[str, IbFill] = {}
+        for fill in self._ib.fills():
+            base = _base_exec_id(fill.execution.execId)
+            known = latest.get(base)
+            if known is None or fill.execution.execId > known.execution.execId:
+                latest[base] = fill  # a correction (.02) replaces the original (.01)
         result = []
-        for fill in found:
+        for base, fill in latest.items():
             execution, report = fill.execution, fill.commissionReport
-            if not report.execId or execution.time < since:
+            at = _utc(execution.time)
+            if not report.execId or at < since:
                 continue  # commission not known yet: booked at the next sync
             result.append(
                 Fill(
-                    fill_id=execution.execId,
+                    fill_id=base,
                     client_order_id=execution.orderRef or f"ibkr-{execution.permId}",
                     symbol=fill.contract.symbol,
                     side=Side.BUY if execution.side == "BOT" else Side.SELL,
                     quantity=_whole(execution.shares),
                     price=_dec(execution.price),
                     commission=_dec(report.commission),
-                    at=execution.time,
+                    at=at,
                 )
             )
         return tuple(sorted(result, key=lambda f: (f.at, f.fill_id)))
+
+
+def _base_exec_id(exec_id: str) -> str:
+    """IBKR execIds end in a correction counter (".01", ".02", ...)."""
+    head, _, tail = exec_id.rpartition(".")
+    return head if head and tail.isdigit() and len(tail) == 2 else exec_id
+
+
+def _utc(moment: datetime) -> datetime:
+    """Execution times without a zone are UTC (assumption A20, checked on the paper account)."""
+    return moment.replace(tzinfo=UTC) if moment.utcoffset() is None else moment
 
 
 def _dec(value: float | Decimal | None) -> Decimal:
@@ -349,6 +414,9 @@ def _view(trade: Trade) -> BrokerOrder:
     order, status = trade.order, _status(trade)
     ref = _ref(order)
     filled = _whole(trade.orderStatus.filled)
+    stored_fill = order.filledQuantity
+    if not filled and 0 < stored_fill < _UNSET:
+        filled = _whole(stored_fill)  # completed order from an earlier session
     parent = ref.rsplit(".", 1)[0] if ref.endswith((".stop", ".tp")) else None
     reason = None
     if status is OrderStatus.REJECTED:
@@ -361,7 +429,9 @@ def _view(trade: Trade) -> BrokerOrder:
         quantity=_whole(order.totalQuantity),
         status=status,
         filled_quantity=filled,
-        average_fill_price=_dec(trade.orderStatus.avgFillPrice) if filled else None,
+        average_fill_price=(
+            _dec(trade.orderStatus.avgFillPrice) if trade.orderStatus.avgFillPrice else None
+        ),
         limit_price=_dec(order.lmtPrice) if order.orderType == "LMT" else None,
         stop_price=_dec(order.auxPrice) if order.orderType == "STP" else None,
         parent_id=parent,

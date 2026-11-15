@@ -46,8 +46,11 @@ SETTINGS = IbkrSettings(
 class ReqIds:
     def __init__(self) -> None:
         self.next = 100
+        self.broken = False
 
     def getReqId(self) -> int:
+        if self.broken:
+            raise ConnectionError("Not connected")  # what ib_async's client raises
         self.next += 1
         return self.next
 
@@ -66,10 +69,23 @@ class FakeIB:
     status_on_place: str = "Submitted"
     placed: list[Order] = field(default_factory=list)
     cancelled: list[Order] = field(default_factory=list)
+    data_type: int | None = None
+    place_raises_after: int | None = None
+    refuse_modify: bool = False
+    refuse_message: str = "Order rejected"
+    sync_errors_raised: bool = False
 
     async def connectAsync(
-        self, host: str, port: int, *, clientId: int, timeout: float | None, account: str
+        self,
+        host: str,
+        port: int,
+        *,
+        clientId: int,
+        timeout: float | None,
+        account: str,
+        raiseSyncErrors: bool,
     ) -> None:
+        self.sync_errors_raised = raiseSyncErrors
         if self.refuse_connect:
             raise ConnectionRefusedError("gateway down")
         self.connected = True
@@ -79,6 +95,13 @@ class FakeIB:
 
     def isConnected(self) -> bool:
         return self.connected
+
+    def reqMarketDataType(self, marketDataType: int) -> None:
+        self.data_type = marketDataType
+
+    def fills(self) -> list[IbFill]:
+        """ib_async's own store: keyed by execId, commission attached when it arrives."""
+        return self.executions
 
     async def accountSummaryAsync(self, account: str) -> list[AccountValue]:
         if self.hang:
@@ -95,9 +118,15 @@ class FakeIB:
         return self.all_trades
 
     def placeOrder(self, contract: Contract, order: Order) -> Trade:
+        if self.place_raises_after is not None and len(self.placed) >= self.place_raises_after:
+            raise ConnectionError("Not connected")
         self.placed.append(order)
         for trade in self.all_trades:
             if trade.order.orderId == order.orderId:
+                if self.refuse_modify:  # ib_async marks the order cancelled on a modify error
+                    trade.orderStatus.status = "Cancelled"
+                    if self.refuse_message:
+                        trade.log.append(TradeLogEntry(NOW, "Cancelled", self.refuse_message, 201))
                 return trade  # a modification of an existing order
         trade = Trade(
             contract=contract,
@@ -114,7 +143,10 @@ class FakeIB:
                 trade.orderStatus.status = "Cancelled"
 
     async def reqExecutionsAsync(self, execFilter: Any = None) -> list[IbFill]:
-        return self.executions
+        """Like ib_async: fresh objects with an *empty* commission report every time."""
+        return [
+            IbFill(f.contract, f.execution, CommissionReport(), f.time) for f in self.executions
+        ]
 
     async def qualifyContractsAsync(self, *contracts: Contract) -> list[Contract | None]:
         return [None if c.symbol in self.unknown_contracts else c for c in contracts]
@@ -156,9 +188,11 @@ def test_satisfies_the_adapter_protocol() -> None:
 
 
 async def test_connect_and_disconnect() -> None:
-    _, broker = setup(connected=False)
+    ib, broker = setup(connected=False)
     await broker.connect()
     assert broker.is_connected()
+    assert ib.sync_errors_raised  # an incomplete startup load counts as a failed connect
+    assert ib.data_type == 1  # live quotes only
     await broker.connect()  # already connected: nothing happens
     await broker.disconnect()
     assert not broker.is_connected()
@@ -282,6 +316,26 @@ async def test_plain_exit_is_transmitted_alone() -> None:
     assert (only.action, only.transmit) == ("SELL", True)
 
 
+async def test_connection_lost_while_placing_is_an_outage() -> None:
+    ib, broker = setup()
+    ib.client.broken = True
+    with pytest.raises(BrokerUnavailableError):
+        await broker.submit(bracket())
+    ib.client.broken = False
+    ib.place_raises_after = 1  # parent placed, then the connection drops
+    with pytest.raises(BrokerUnavailableError):
+        await broker.submit(bracket())
+
+
+async def test_incomplete_bracket_is_never_resent_without_its_stop() -> None:
+    ib, broker = setup(place_raises_after=1)
+    with pytest.raises(BrokerUnavailableError):
+        await broker.submit(bracket())
+    ib.place_raises_after = None
+    with pytest.raises(BrokerError, match="without its stop"):
+        await broker.submit(bracket())
+
+
 async def test_resubmitting_returns_the_existing_order() -> None:
     ib, broker = setup()
     await broker.submit(bracket())
@@ -329,6 +383,40 @@ async def test_rejection_carries_ibkrs_message() -> None:
 
 
 # -- status mapping ----------------------------------------------------------------------
+
+
+async def test_validation_warning_keeps_a_live_order_working() -> None:
+    ib, broker = setup()
+    await broker.submit(bracket())
+    stop = by_ref(ib, "trend:AAPL:1.stop")
+    stop.orderStatus.status = "ValidationError"  # e.g. code 399 after hours
+    view = await broker.order("trend:AAPL:1.stop")
+    assert view is not None
+    assert view.status is Status.SUBMITTED
+
+
+async def test_completed_order_from_an_earlier_session_keeps_its_fill() -> None:
+    ib, broker = setup()
+    order = Order(
+        orderId=0,
+        permId=55,
+        orderRef="old",
+        action="BUY",
+        totalQuantity=10,
+        orderType="LMT",
+        lmtPrice=100.0,
+        filledQuantity=10.0,
+    )
+    ib.all_trades.append(
+        Trade(
+            contract=Stock("AAPL", "SMART", "USD"),
+            order=order,
+            orderStatus=OrderStatus(status="Filled"),
+        )
+    )
+    view = await broker.order("old")
+    assert view is not None
+    assert (view.status, view.filled_quantity, view.average_fill_price) == (Status.FILLED, 10, None)
 
 
 async def test_partial_and_full_fills() -> None:
@@ -419,6 +507,37 @@ async def test_modify_stop_refusals(ref: str, price: str, match: str) -> None:
         await broker.modify_stop(ref, D(price))
 
 
+async def test_refused_stop_change_keeps_the_old_level_and_raises() -> None:
+    ib, broker = setup()
+    await broker.submit(bracket())
+    ib.refuse_modify = True
+    with pytest.raises(BrokerError, match="refused the stop change: Order rejected"):
+        await broker.modify_stop("trend:AAPL:1.stop", D("97.50"))
+    assert by_ref(ib, "trend:AAPL:1.stop").order.auxPrice == 95.0
+    stop = by_ref(ib, "trend:AAPL:1.stop")
+    stop.log.clear()
+    stop.orderStatus.status = "Submitted"
+    ib.refuse_message = ""
+    with pytest.raises(BrokerError, match="no reason"):
+        await broker.modify_stop("trend:AAPL:1.stop", D("97.50"))
+
+
+async def test_connection_lost_while_cancelling_or_moving() -> None:
+    ib, broker = setup()
+    await broker.submit(bracket())
+    ib.place_raises_after = len(ib.placed)
+
+    def down(order: Order) -> None:
+        raise ConnectionError("Not connected")
+
+    ib.cancelOrder = down  # type: ignore[method-assign]
+    with pytest.raises(BrokerUnavailableError):
+        await broker.cancel("trend:AAPL:1")
+    with pytest.raises(BrokerUnavailableError):
+        await broker.modify_stop("trend:AAPL:1.stop", D("97.50"))
+    assert by_ref(ib, "trend:AAPL:1.stop").order.auxPrice == 95.0
+
+
 async def test_finished_stop_cannot_be_moved() -> None:
     ib, broker = setup()
     await broker.submit(bracket())
@@ -465,3 +584,21 @@ async def test_fills_wait_for_commission_and_respect_since() -> None:
     ]
     assert fills[0].price == D("100.15")
     assert fills[0].quantity == 10
+
+
+async def test_corrected_execution_replaces_the_original() -> None:
+    ib, broker = setup()
+    first = execution("0001.aa.01.01", "trend:AAPL:1", "BOT", NOW, 1.0)
+    fixed = execution("0001.aa.01.02", "trend:AAPL:1", "BOT", NOW, 1.5)
+    for order in ([first, fixed], [fixed, first]):  # whichever arrives first
+        ib.executions = order
+        (only,) = await broker.fills(NOW)
+        assert (only.fill_id, only.commission) == ("0001.aa.01", D("1.5"))
+
+
+async def test_execution_time_without_zone_is_read_as_utc() -> None:
+    ib, broker = setup()
+    naive = NOW.replace(tzinfo=None)
+    ib.executions = [execution("e9", "trend:AAPL:1", "BOT", naive, 1.0)]
+    (only,) = await broker.fills(NOW)
+    assert only.at == NOW

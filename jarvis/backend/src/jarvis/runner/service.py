@@ -42,6 +42,11 @@ class LogAlerts:
         log("ALERT: %s", message_sv)
 
 
+def _report_unexpected_end(task: asyncio.Task[None]) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        logger.critical("the trading loop stopped unexpectedly", exc_info=task.exception())
+
+
 def ibkr_settings_from_env(env: Mapping[str, str]) -> IbkrSettings:
     account = env.get("JARVIS_IBKR_ACCOUNT", "")
     if not account:
@@ -110,6 +115,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
         )
         stop = asyncio.Event()
         task = asyncio.create_task(runner.run(stop))
+        task.add_done_callback(_report_unexpected_end)
         try:
             yield
         finally:

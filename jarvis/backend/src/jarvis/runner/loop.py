@@ -121,6 +121,7 @@ class Runner:
             await self.after_close(day)
 
     async def after_close(self, day: date) -> None:
+        await self.load_instruments()  # retry symbols that could not be loaded before
         bars: dict[str, list[Bar]] = {}
         for symbol, instrument in self._instruments.items():
             bars[symbol] = await self._market.daily_bars(
@@ -167,7 +168,15 @@ class Runner:
             )
 
     async def run(self, stop: asyncio.Event) -> None:
-        await self.start()
+        """Never ends on an error: a failed start is retried, a failed tick is logged and the
+        next one runs a minute later. Until the start succeeds nothing trades."""
+        while not stop.is_set():
+            try:
+                await self.start()
+                break
+            except Exception:
+                logger.exception("runner start failed; retrying in a minute")
+                await self._sleep(self._every)
         while not stop.is_set():
             try:
                 await self.tick()

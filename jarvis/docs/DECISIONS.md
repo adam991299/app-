@@ -4,6 +4,21 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D22. Rättelser efter granskningen av IBKR-kopplingen
+Granskaren läste `ib_async`:s källkod och hittade fyra fel som min fejkade gateway dolde.
+Alla är rättade, och den fejkade gatewayn beter sig nu som `ib_async` på just de punkterna:
+- **Fyllnader hade aldrig bokförts.** `reqExecutions` ger nya objekt utan provision; den
+  riktiga provisionen hamnar i `ib.fills()`. Jarvis läser nu därifrån.
+- **Avslutade order från en tidigare session visade 0 fyllda** (efter varje omstart av
+  gatewayn). Nu används orderns eget fält `filledQuantity`.
+- **En varning (ValidationError, t.ex. kod 399 efter stängning) tolkades som avvisad order.**
+  Nu räknas den som en levande order.
+- **En flyttad stopp sågs som flyttad innan IBKR godkänt.** Säger IBKR nej återställs
+  nivån och ändringen rapporteras som misslyckad.
+Dessutom: tappad anslutning under orderläggning räknas som avbrott; en bracket utan sin stopp
+skickas aldrig om; rättade fyllnader (`.01` → `.02`) ersätter originalet; anslutningen kräver
+att alla order laddats; bara realtidskurser begärs; körslingan kan inte dö tyst vid start.
+
 ### D21. Körslingan och de 20 aktierna
 - Den tunna versionen följer 20 stora, likvida amerikanska aktier i olika sektorer
   (`config/universe_us.yaml`). Sektorn hämtas från IBKR. Listan ersätts av

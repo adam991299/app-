@@ -49,7 +49,7 @@ class IbkrMarket:
         ib: MarketClient,
         clock: Callable[[], datetime],
         base_currency: str = "SEK",
-        timeout_seconds: float = 10.0,
+        timeout_seconds: float = 15.0,  # IBKR snapshots can take about 11 s
     ) -> None:
         self._ib = ib
         self._clock = clock
