@@ -220,11 +220,14 @@ class Validation(_Section):
 
 
 class Lifecycle(_Section):
-    """Promotion requirements (§6.4) and paper-result haircut (§11.3)."""
+    """Promotion requirements (§6.4) and paper-result haircut (§11.3).
 
-    paper_min_trading_days: int = Field(default=60, ge=1)
+    Adam removed the minimum paper-trading time (decision D14), so the day and month
+    minimums default to 0. The minimum number of paper trades still applies."""
+
+    paper_min_trading_days: int = Field(default=0, ge=0)
     paper_min_trades: int = Field(default=50, ge=1)
-    slow_strategy_paper_min_months: int = Field(default=3, ge=1)
+    slow_strategy_paper_min_months: int = Field(default=0, ge=0)
     paper_slippage_multiplier: float = Field(default=2.0, ge=1.0, le=10)
 
 

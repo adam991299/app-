@@ -83,10 +83,11 @@ viktigaste; detaljer ett tryck bort.
 | Vad | Var | Kommando |
 |---|---|---|
 | Backend-kontroller | `backend/` | `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest && uv run pip-audit --skip-editable` |
-| 100 %-kravet | `backend/` | `uv run coverage report --include='src/jarvis/risk/*,src/jarvis/broker/*' --fail-under=100` (lägg till `execution/` och `economics/` när de finns) |
+| 100 %-kravet | `backend/` | `uv run coverage report --include='src/jarvis/risk/*,src/jarvis/broker/*,src/jarvis/execution/*' --fail-under=100` (lägg till `economics/` när den finns) |
 | Webb-kontroller | `web/` | `npm run lint && npm run typecheck && npm run build` |
 | Starta allt | `jarvis/` | `scripts/init-env.sh && docker compose up -d --build --wait` |
 | Röktest | `jarvis/` | `scripts/smoke.sh` |
+| Databastester som root | `backend/` | starta PostgreSQL som användaren `postgres` och sätt `JARVIS_TEST_POSTGRES=host:port` (D13) |
 
 ## Struktur
 - `backend/src/jarvis/` — Python-paketet, en modul per ansvar: `config/`, `service/`,

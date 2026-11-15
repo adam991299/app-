@@ -4,6 +4,28 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D14. Adam tar bort kraven på tid i pappershandel
+Adam: "ta bort dem där kraven på 10 och 60 dagar. Jag vill inte behöva vänta fler månader."
+Ändrat efter Adams uttryckliga beslut (avviker från specen §00.5, §6.4 och §13):
+- Fas 0.5 kräver inte längre 10 handelsdagar. Den är klar när hela kedjan är verifierad mot
+  den simulerade mäklaren och mot IBKR Paper.
+- Fas 8 kräver inte längre 60 handelsdagar. Pappershandeln pågår så länge Adam vill, och
+  slutrapporten kan tas fram när han vill.
+- En strategi behöver ingen minsta tid i papper (`paper_min_trading_days` och
+  `slow_strategy_paper_min_months` är 0).
+
+**Oförändrat:** riktig handel startar bara när Adam själv slår på den i appen (§9.4);
+risk-motorn, stoppen och kill switch gäller som förut; en strategi behöver fortfarande minst
+50 affärer i papper (statistiskt underlag, inte väntetid) och måste klara valideringen i §6.3.
+**Risken, som Adam har fått veta:** utan tid i papper bygger beslutet om riktig handel
+nästan bara på backtester, som brukar se bättre ut än verkligheten.
+
+### D15. Utgångar sker genom att höja stoppen (tunna versionen)
+I Fas 0.5 stänger Jarvis en position bara genom att höja stopporderna hos mäklaren (aldrig
+sänka), som i en kanalutgång för trendföljning. Positionen har då alltid ett skydd. Manuell
+stängning ("stäng positionen nu") kräver att stoppen tas bort före försäljningen och byggs i
+Fas 5 tillsammans med ett reservstopp om försäljningen misslyckas.
+
 ### D12. Dag och vecka för förlustgränserna följer svensk tid
 Kontot är ett ISK i kronor, så "dagens förlust" räknas från midnatt till midnatt i
 Europe/Stockholm, och veckan börjar måndag 00:00 svensk tid. Referensvärdet är kontots sista

@@ -165,6 +165,20 @@ class SimBroker:
             self._sync_bracket(found)
         return self._orders[client_order_id].view
 
+    async def modify_stop(self, client_order_id: str, stop_price: Decimal) -> BrokerOrder:
+        self._guard()
+        found = self._orders.get(client_order_id)
+        if found is None or found.kind != "stop":
+            raise BrokerError(f"no protective stop {client_order_id}")
+        if found.view.status.is_terminal:
+            raise BrokerError(f"stop {client_order_id} is no longer working")
+        if stop_price <= 0:
+            raise BrokerError("stop price must be positive")
+        found.level = stop_price
+        self._set(client_order_id, stop_price=stop_price)
+        self._match(found.view.symbol)
+        return self._orders[client_order_id].view
+
     # -- simulation controls -----------------------------------------------------------
 
     def set_price(self, symbol: str, price: Decimal) -> None:
@@ -237,6 +251,8 @@ class SimBroker:
             status=OrderStatus.SUBMITTED,
             filled_quantity=0,
             average_fill_price=None,
+            limit_price=None if kind == "stop" else level,
+            stop_price=level if kind == "stop" else None,
             parent_id=req.client_order_id if kind in ("stop", "take_profit") else None,
         )
         self._orders[cid] = _Order(view=view, kind=kind, level=level, active=active)

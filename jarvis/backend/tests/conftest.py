@@ -1,4 +1,4 @@
-"""A real PostgreSQL for store tests: one server per test session, a freshly migrated
+"""A real PostgreSQL for tests that need the store: one server per test session, a freshly migrated
 database per test. Fails loudly (never skips) if PostgreSQL is not available.
 
 By default the tests start their own server (as in CI). PostgreSQL refuses to run as

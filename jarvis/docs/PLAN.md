@@ -30,8 +30,8 @@ Fas 0 ──► Fas 0.5 (tunn version, pappershandlar ≥ 10 handelsdagar) ─�
 nyhetsmotorn (4), politikersignaler (4.2), appens design och vyer (6), research-labbet (2),
 ekonomimodulen. **Byggs aldrig i hast:** `risk/`, `execution/`, `broker/`, `economics/`.
 
-**Kan inte snabbas upp:** Fas 0.5 (10 handelsdagar) och Fas 8 (60 handelsdagar) mäts i
-kalendertid och kräver en VPS som är igång dygnet runt. Allt annat byggs under tiden.
+**Tidskrav:** borttagna av Adam (D14). Pappershandeln kräver fortfarande en server som är
+igång dygnet runt och Adams IBKR Paper-inloggning.
 
 ## Faser
 
@@ -54,9 +54,9 @@ Repo-struktur, Docker Compose, CI (lint, typkontroll, tester), `README.md` på s
 ### 🔨 Fas 0.5 – Den tunna versionen hela vägen
 Amerikanska aktier, en strategi, IBKR Paper, risk-engine med nödstopp, avstämning, test- och
 live-miljöer (§11), och en enkel men redan snygg hemskärm enligt §9.1.
-**Acceptanskrav:** Körs automatiskt i minst 10 handelsdagar utan fel eller manuella ingrepp
-(utöver 2FA). Varje affär går att följa från signal till fyllnad. Kill switch testad.
-Hemskärmen granskad med skärmdumpar.
+**Acceptanskrav (ändrat av Adam, D14):** Körs automatiskt utan fel eller manuella ingrepp
+(utöver 2FA) — kravet på minst 10 handelsdagar är borttaget. Varje affär går att följa från
+signal till fyllnad. Kill switch testad. Hemskärmen granskad med skärmdumpar.
 
 Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
 - [x] Delade typer (`domain/`): instrument, kurs, position, konto — pengar alltid `Decimal`
@@ -70,12 +70,13 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
 - [x] API-kontrakt för appen (`contracts/api.schema.json`, test mot avdrift)
 - [x] Databasschema och lagring: kill switch, paus, kontovärden, orderjournal, fyllnader,
       riskbeslut, revisionslogg (D12, D13)
-- [ ] `execution/`: order-tillståndsmaskin, idempotens vid omstart, avstämning varje minut
+- [x] `execution/`: order-tillståndsmaskin, journal före avsändning, idempotens vid omstart,
+      återhämtning, avstämning, larm, höjning av stopp (D15); 100 % täckning
 - [ ] Trendföljningsstrategi på dagsbarer (amerikanska aktier)
 - [ ] Hemskärm enligt §9.1 med status, innehav och affärer
 - [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
-- [ ] 10 handelsdagar automatisk pappershandel
+- [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)
 
 **Skjuts uttryckligen upp** (risk-delar som kräver data eller vyer som inte finns än).
 Fram till dess handlar den tunna versionen bara en strategi på amerikanska aktier och
@@ -163,7 +164,7 @@ någon åtgärd. Svarstiden i röstläge mäts.
 Deploy till VPS, Caddy, Cloudflare Access/Tailscale, passkeys, övervakning, backup och watchdog.
 **Acceptanskrav:** Säkerhetschecklista genomgången. Återställning från backup testad.
 
-### ⬜ Fas 8 – Pappershandel i minst 60 handelsdagar
+### ⬜ Fas 8 – Pappershandel (kravet på 60 handelsdagar borttaget av Adam, D14)
 Jarvis körs helt automatiskt i papper. Veckorapporter. Avvikelser mot backtest och mot index
 analyseras.
 **Acceptanskrav:** Adam får en slutrapport: vad som fungerade, vad som inte gjorde det, och om

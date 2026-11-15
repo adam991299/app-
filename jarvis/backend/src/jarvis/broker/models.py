@@ -85,6 +85,8 @@ class BrokerOrder:
     status: OrderStatus
     filled_quantity: int
     average_fill_price: Decimal | None
+    limit_price: Decimal | None = None  # entries, exits and take-profits
+    stop_price: Decimal | None = None  # protective stops: the trigger level
     parent_id: str | None = None
     reject_reason: str | None = None
 

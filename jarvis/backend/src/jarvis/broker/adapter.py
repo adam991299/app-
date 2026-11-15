@@ -11,6 +11,7 @@ Rules for implementations:
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Protocol
 
 from jarvis.broker.models import BrokerOrder, BrokerPosition, Fill, OrderRequest
@@ -35,5 +36,9 @@ class BrokerAdapter(Protocol):
     async def submit(self, request: OrderRequest) -> BrokerOrder: ...
 
     async def cancel(self, client_order_id: str) -> BrokerOrder: ...
+
+    async def modify_stop(self, client_order_id: str, stop_price: Decimal) -> BrokerOrder:
+        """Move a working protective stop to a new trigger price."""
+        ...
 
     async def fills(self, since: datetime) -> tuple[Fill, ...]: ...

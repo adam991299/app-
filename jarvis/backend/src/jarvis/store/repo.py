@@ -63,6 +63,8 @@ class StoredOrder:
     filled_quantity: int
     average_fill_price: Decimal | None
     strategy: str | None
+    limit_price: Decimal | None
+    stop_price: Decimal | None
 
 
 def _stored(row: OrderRow) -> StoredOrder:
@@ -77,6 +79,8 @@ def _stored(row: OrderRow) -> StoredOrder:
         filled_quantity=row.filled_quantity,
         average_fill_price=row.average_fill_price,
         strategy=row.strategy,
+        limit_price=row.limit_price,
+        stop_price=row.stop_price,
     )
 
 
@@ -276,6 +280,35 @@ class Store:
             )
             if not result.rowcount:  # type: ignore[attr-defined]
                 raise KeyError(f"unknown order {client_order_id}")
+
+    async def set_stop_price(
+        self, client_order_id: str, stop_price: Decimal, *, at: datetime
+    ) -> None:
+        async with self._sessions.begin() as session:
+            result = await session.execute(
+                update(OrderRow)
+                .where(OrderRow.client_order_id == client_order_id)
+                .values(stop_price=stop_price, updated_at=at)
+            )
+            if not result.rowcount:  # type: ignore[attr-defined]
+                raise KeyError(f"unknown order {client_order_id}")
+
+    async def count_orders_since(self, since: datetime) -> int:
+        """Entries and exits Jarvis created since ``since`` (for the order-rate limits)."""
+        async with self._sessions() as session:
+            count = await session.scalar(
+                select(func.count())
+                .select_from(OrderRow)
+                .where(OrderRow.created_at >= since, OrderRow.kind.in_(("entry", "exit")))
+            )
+            return int(count or 0)
+
+    async def known_order(self, client_order_id: str) -> StoredOrder:
+        """Like ``order``, for ids Jarvis itself journaled: a missing row is a bug and raises."""
+        found = await self.order(client_order_id)
+        if found is None:
+            raise KeyError(f"unknown order {client_order_id}")
+        return found
 
     async def order(self, client_order_id: str) -> StoredOrder | None:
         async with self._sessions() as session:

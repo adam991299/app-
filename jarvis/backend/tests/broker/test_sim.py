@@ -459,3 +459,57 @@ def test_target_waits_when_it_has_sold_everything_bought_so_far() -> None:
     assert held(sim) == 0
     assert len(run(sim.fills(NOW))) == 2
     assert status(sim, "o1") is OrderStatus.PARTIALLY_FILLED
+
+
+def test_orders_report_their_price_levels() -> None:
+    sim = broker()
+    run(sim.submit(bracket(limit="99", tp="110")))
+    entry, stop, tp = (run(sim.order(c)) for c in ("o1", "o1.stop", "o1.tp"))
+    assert entry is not None
+    assert stop is not None
+    assert tp is not None
+    assert (entry.limit_price, entry.stop_price) == (D(99), None)
+    assert (stop.limit_price, stop.stop_price) == (None, D(95))
+    assert (tp.limit_price, tp.stop_price) == (D(110), None)
+
+
+def test_raising_a_stop_moves_the_exit() -> None:
+    sim = broker()
+    run(sim.submit(bracket()))
+    moved = run(sim.modify_stop("o1.stop", D(98)))
+    assert moved.stop_price == D(98)
+    sim.set_price("AAPL", D("97.5"))
+    assert held(sim) == 0
+    stop = run(sim.order("o1.stop"))
+    assert stop is not None
+    assert stop.average_fill_price == D("97.5")
+
+
+def test_moving_a_stop_through_the_price_triggers_it() -> None:
+    sim = broker()
+    run(sim.submit(bracket()))
+    run(sim.modify_stop("o1.stop", D(101)))
+    assert held(sim) == 0
+
+
+@pytest.mark.parametrize(
+    ("cid", "price", "match"),
+    [
+        ("o1", "98", "no protective stop"),
+        ("nope", "98", "no protective stop"),
+        ("o1.stop", "0", "positive"),
+    ],
+)
+def test_modify_stop_errors(cid: str, price: str, match: str) -> None:
+    sim = broker()
+    run(sim.submit(bracket()))
+    with pytest.raises(BrokerError, match=match):
+        run(sim.modify_stop(cid, D(price)))
+
+
+def test_finished_stop_cannot_be_moved() -> None:
+    sim = broker()
+    run(sim.submit(bracket()))
+    sim.set_price("AAPL", D(90))
+    with pytest.raises(BrokerError, match="no longer working"):
+        run(sim.modify_stop("o1.stop", D(80)))

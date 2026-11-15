@@ -26,7 +26,7 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest
       - name: 100 % coverage in money-critical modules (spec §00.3)
-        run: uv run coverage report --include='src/jarvis/risk/*,src/jarvis/broker/*' --fail-under=100
+        run: uv run coverage report --include='src/jarvis/risk/*,src/jarvis/broker/*,src/jarvis/execution/*' --fail-under=100
       - name: Vulnerability scan (spec §10)
         run: uv run pip-audit --skip-editable
 

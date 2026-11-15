@@ -82,10 +82,10 @@ def test_every_default_is_the_number_in_the_spec() -> None:
             "holdout_pct": 20.0,
             "max_free_parameters": 5,
         },
-        "lifecycle": {  # §6.4, §11.3
-            "paper_min_trading_days": 60,
+        "lifecycle": {  # §6.4, §11.3; minimum paper time removed by Adam (D14)
+            "paper_min_trading_days": 0,
             "paper_min_trades": 50,
-            "slow_strategy_paper_min_months": 3,
+            "slow_strategy_paper_min_months": 0,
             "paper_slippage_multiplier": 2.0,
         },
         "opportunities": {"max_per_day": 5, "reprice_daytrade_pct": 0.5, "reprice_swing_pct": 1.5},

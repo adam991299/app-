@@ -73,9 +73,9 @@ validation:
   holdout_pct: 20.0
   max_free_parameters: 5
 lifecycle:
-  paper_min_trading_days: 60
+  paper_min_trading_days: 0
   paper_min_trades: 50
-  slow_strategy_paper_min_months: 3
+  slow_strategy_paper_min_months: 0
   paper_slippage_multiplier: 2.0
 opportunities:
   max_per_day: 5

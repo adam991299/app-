@@ -14,7 +14,7 @@ from jarvis.broker.models import Fill, OrderStatus
 from jarvis.domain import Side
 from jarvis.store.db import DatabaseConfigError, database_url_from_env
 from jarvis.store.repo import NewOrder, Store
-from tests.store.conftest import ALEMBIC_INI, migrate
+from tests.conftest import ALEMBIC_INI, migrate
 
 D = Decimal
 # Monday 16 Nov 2026, 16:00 UTC = 17:00 in Stockholm
@@ -282,3 +282,26 @@ def test_database_url_must_be_async_postgres(url: str) -> None:
 def test_database_url_from_env() -> None:
     url = "postgresql+asyncpg://jarvis@db/jarvis"
     assert database_url_from_env({"JARVIS_DATABASE_URL": url}) == url
+
+
+async def test_known_order_raises_for_unknown_ids(store: Store) -> None:
+    with pytest.raises(KeyError, match="unknown order"):
+        await store.known_order("ghost")
+    await store.add_order(entry(), at=NOW)
+    assert (await store.known_order("trend-1")).symbol == "AAPL"
+
+
+async def test_stop_price_updates_and_order_counts(store: Store) -> None:
+    await store.add_order(entry(), at=NOW)
+    await store.add_order(
+        entry("trend-1.stop", kind="stop", side="sell", parent_id="trend-1", limit_price=None),
+        at=NOW,
+    )
+    await store.add_order(entry("later", kind="entry"), at=NOW + timedelta(minutes=5))
+    await store.set_stop_price("trend-1.stop", D(98), at=NOW)
+    stop = await store.known_order("trend-1.stop")
+    assert stop.stop_price == D(98)
+    assert await store.count_orders_since(NOW) == 2  # stops are not counted
+    assert await store.count_orders_since(NOW + timedelta(minutes=1)) == 1
+    with pytest.raises(KeyError):
+        await store.set_stop_price("ghost", D(1), at=NOW)
