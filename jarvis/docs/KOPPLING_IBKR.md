@@ -31,7 +31,8 @@ Det är papperskontots inloggning Jarvis ska använda. Den kan aldrig röra rikt
    använder "Always Free". Uppgradera inte kontot.
 3. Skapa en server: **Compute → Instances → Create instance**.
    - Image: **Ubuntu 24.04**
-   - Shape: **Ampere → VM.Standard.A1.Flex**, 2 OCPU och 12 GB minne (gratisgränsen)
+   - Shape: **Ampere → VM.Standard.A1.Flex**. Välj så mycket som kontot tillåter gratis
+     (för vissa konton 1 OCPU och 6 GB, för andra upp till 2 OCPU och 12 GB).
    - Ladda ner den privata SSH-nyckeln som Oracle erbjuder och spara den.
 4. Får du felet "Out of capacity" finns ingen ledig gratismaskin just då. Försök igen senare.
 

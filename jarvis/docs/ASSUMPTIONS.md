@@ -20,7 +20,7 @@ flyttas då till "Verifierat" med datum och källa.
 | A10 | Att KBLab:s svenska Whisper-modell finns och hur den presterar. | Fas 6.5 |
 | A11 | Årets skattefria grundnivå och schablonsats för ISK. Fälten i `config/default.yaml` är därför tomma, och ekonomimodulen ska vägra räkna skatt tills de är ifyllda från Skatteverket. | Ekonomimodulen |
 | A13 | Att IBKR:s papperskonto får samma gratis realtidsdata (Cboe One/IEX) som huvudkontot. | Fas 0.5 |
-| A14 | Oracle Cloud Always Free: exakt gräns efter 2026 års sänkning (rapporterat 2 OCPU/12 GB) och att Stockholm-regionen har ledig kapacitet. | Fas 7 |
+| A14 | Att Jarvis ryms på 1 OCPU och 6 GB. Adams Oracle-konto tillåter bara det (2026-11-15), inte de rapporterade 2 OCPU/12 GB. Uppskattat behov: ca 4 GB. Mäts när allt kör på servern; Grafana och Prometheus kan stängas av om minnet inte räcker. | Fas 0.5 |
 | A15 | Att en andra användare utan uttagsrätt går att skapa på ett privat ISK-konto. | Före riktig handel |
 | A12 | IBKR:s tider för daglig omstart och intervallet för ny 2FA-inloggning (specen anger "normalt en gång i veckan"). | Fas 0.5 |
 
