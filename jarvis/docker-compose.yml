@@ -143,6 +143,11 @@ services:
       JARVIS_IBKR_PORT: "4004"
       JARVIS_IBKR_ACCOUNT: ${IBKR_PAPER_ACCOUNT:-}
       JARVIS_UNIVERSE: /app/config/universe_us.yaml
+      JARVIS_SMTP_HOST: ${JARVIS_SMTP_HOST:-}
+      JARVIS_SMTP_PORT: ${JARVIS_SMTP_PORT:-465}
+      JARVIS_SMTP_USER: ${JARVIS_SMTP_USER:-}
+      JARVIS_SMTP_PASSWORD: ${JARVIS_SMTP_PASSWORD:-}
+      JARVIS_ALERT_EMAIL: ${JARVIS_ALERT_EMAIL:-}
     depends_on:
       db: { condition: service_healthy }
       ib-gateway: { condition: service_started }

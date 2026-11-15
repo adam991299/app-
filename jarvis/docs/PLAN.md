@@ -90,7 +90,7 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
       avstämning varje minut, klockkontroll mot NTP, kurser i realtid från IBKR (annars ingen
       kurs), dagsdata klippt vid senaste stängda dag, stopphöjning efter stängning,
       köpsignaler loggas men skickas inte förrän en validerad förväntad vinst finns (D18)
-- [ ] Larm som push och e-post (notistjänsten); i dag hamnar larmen i loggen
+- [x] Larm via e-post (Adams eget Gmail, valfritt) och alltid i loggen; Web Push kommer med appen i Fas 6
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
 - [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)
 

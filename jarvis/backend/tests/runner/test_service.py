@@ -87,3 +87,21 @@ def test_service_starts_the_runner_and_stops_it_cleanly(
     asyncio.run(serve_briefly())
     routes = {getattr(r, "path", "") for r in app.routes}
     assert "/healthz" in routes
+
+
+def test_service_with_email_alerts_configured(
+    database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(service, "IB", GatewayDown)
+    env = {
+        "JARVIS_DATABASE_URL": database_url,
+        "JARVIS_IBKR_ACCOUNT": "DU1",
+        "JARVIS_UNIVERSE": str(UNIVERSE),
+        "JARVIS_SMTP_HOST": "smtp.gmail.com",
+        "JARVIS_SMTP_USER": "jarvis@example.com",
+        "JARVIS_SMTP_PASSWORD": "x",
+        "JARVIS_ALERT_EMAIL": "adam@example.com",
+    }
+    assert create_execution_app(Settings(), env) is not None
+    with pytest.raises(ConfigError, match="half configured"):
+        create_execution_app(Settings(), {k: v for k, v in env.items() if k != "JARVIS_SMTP_HOST"})

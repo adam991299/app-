@@ -94,6 +94,10 @@ IBKR_PAPER_PASSWORD=ditt-papperslösenord
 IBKR_PAPER_ACCOUNT=DU1234567
 ```
 
+Vill du ha larm via e-post, fyll också i raderna som börjar med `JARVIS_SMTP_` och
+`JARVIS_ALERT_EMAIL` (förklaring står i filen). Använd ett eget Gmail-konto för Jarvis med
+ett applösenord, aldrig ditt vanliga lösenord.
+
 4. Starta allt:
 
 ```bash

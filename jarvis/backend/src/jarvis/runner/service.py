@@ -18,10 +18,11 @@ from ib_async import IB
 from jarvis.broker.ibkr import IbkrBroker, IbkrSettings
 from jarvis.config import ConfigError, Settings
 from jarvis.domain import Instrument
-from jarvis.execution.alerts import AlertLevel
+from jarvis.execution.alerts import AlertLevel, Alerts
 from jarvis.execution.engine import ExecutionEngine
 from jarvis.marketdata.ibkr import IbkrMarket
 from jarvis.markets.calendar import Exchange, session_at
+from jarvis.notify.email import EmailAlerts, FanOut, smtp_settings_from_env
 from jarvis.runner.clock import ClockMonitor, ntp_measure
 from jarvis.runner.loop import Runner
 from jarvis.service.app import create_app
@@ -35,7 +36,7 @@ DEFAULT_UNIVERSE = Path("/app/config/universe_us.yaml")
 
 
 class LogAlerts:
-    """Alerts go to the log until the notifier (push and e-mail, §9.3) is built."""
+    """Every alert is logged; e-mail is added when it is configured (Web Push: Fas 6)."""
 
     async def send(self, level: AlertLevel, message_sv: str) -> None:
         log = logger.critical if level is AlertLevel.CRITICAL else logger.warning
@@ -79,6 +80,8 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
     url = database_url_from_env(env)
     ibkr = ibkr_settings_from_env(env)
     symbols = load_symbols(Path(env.get("JARVIS_UNIVERSE", str(DEFAULT_UNIVERSE))))
+    smtp = smtp_settings_from_env(env)
+    alerts: Alerts = LogAlerts() if smtp is None else FanOut(LogAlerts(), EmailAlerts(smtp))
     migrate(url)
     app = create_app(ServiceName.EXECUTION)
 
@@ -101,7 +104,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             sessions=lambda _i, now: session_at(Exchange.NYSE, now),
             clock=clock,
             clock_drift=monitor.drift,
-            alerts=LogAlerts(),
+            alerts=alerts,
         )
         runner = Runner(
             broker=IbkrBroker(ib, ibkr),
