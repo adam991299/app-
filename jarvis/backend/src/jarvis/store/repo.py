@@ -24,7 +24,9 @@ from jarvis.store.tables import (
     EquitySnapshot,
     FillRow,
     OrderRow,
+    ResearchTrial,
     RiskDecisionRow,
+    ValidationRow,
 )
 
 
@@ -419,6 +421,60 @@ class Store:
                 .order_by(OrderRow.created_at)
             )
             return {symbol: strategy for symbol, strategy in rows if strategy}
+
+    async def record_trials(
+        self, strategy: str, trials: list[dict[str, Any]], *, at: datetime
+    ) -> None:
+        """Each dict: params, sample, window, sharpe, trades."""
+        async with self._sessions.begin() as session:
+            session.add_all(ResearchTrial(at=at, strategy=strategy, **t) for t in trials)
+
+    async def trial_sharpes(self, strategy: str) -> list[float]:
+        """Per-day Sharpe of every in-sample variant ever tried for this strategy."""
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(ResearchTrial.sharpe).where(
+                    ResearchTrial.strategy == strategy, ResearchTrial.sample == "in"
+                )
+            )
+            return list(rows)
+
+    async def save_validation(
+        self,
+        strategy: str,
+        *,
+        params: dict[str, Any] | None,
+        passed: bool,
+        edge_r: float,
+        report_sv: str,
+        at: datetime,
+    ) -> None:
+        async with self._sessions.begin() as session:
+            session.add(
+                ValidationRow(
+                    at=at,
+                    strategy=strategy,
+                    params=params,
+                    passed=passed,
+                    edge_r=edge_r,
+                    report_sv=report_sv,
+                )
+            )
+
+    async def latest_validation(
+        self, strategy: str
+    ) -> tuple[bool, float, dict[str, Any] | None, str] | None:
+        """(passed, edge_r, params, report) of the newest validation, or None."""
+        async with self._sessions() as session:
+            row = await session.scalar(
+                select(ValidationRow)
+                .where(ValidationRow.strategy == strategy)
+                .order_by(ValidationRow.at.desc(), ValidationRow.id.desc())
+                .limit(1)
+            )
+            if row is None:
+                return None
+            return row.passed, row.edge_r, row.params, row.report_sv
 
     async def fills_since(self, since: datetime) -> list[Fill]:
         async with self._sessions() as session:

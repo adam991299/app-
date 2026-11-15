@@ -20,6 +20,7 @@ def test_both_backtesters_agree(seed: int) -> None:
     for a, b in zip(event.trades, vector.trades, strict=True):
         assert (a.entry_index, a.exit_index, a.shares) == (b.entry_index, b.exit_index, b.shares)
         assert a.pnl == pytest.approx(b.pnl, rel=1e-9, abs=1e-6)
+        assert a.r_multiple == pytest.approx(b.r_multiple, rel=1e-9, abs=1e-9)
     assert event.equity == pytest.approx(vector.equity, rel=1e-9)
 
 
@@ -49,3 +50,10 @@ def test_cost_model() -> None:
     big = model.slippage_per_share(100, 40_000, 1_000_000)
     assert big > small > 0
     assert model.slippage_per_share(100, 1, 0) > big  # unknown volume: assume the worst
+
+
+def test_r_multiple() -> None:
+    from jarvis.research.event_backtest import Trade
+
+    assert Trade(0, 1, 10, 100.0, 120.0, 0.0, 90.0).r_multiple == pytest.approx(2.0)
+    assert Trade(0, 1, 10, 100.0, 95.0, 0.0, 100.0).r_multiple == 0.0  # no risk recorded

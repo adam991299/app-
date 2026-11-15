@@ -314,3 +314,29 @@ async def test_unknown_status_or_kind_cannot_be_stored(store: Store, engine: Asy
     async with engine.begin() as conn:
         with pytest.raises(IntegrityError):
             await conn.execute(text("UPDATE orders SET status = 'vanished'"))
+
+
+async def test_trials_are_kept_and_validations_ordered(store: Store) -> None:
+    trial = {
+        "params": {"entry_lookback": 55},
+        "sample": "in",
+        "window": 0,
+        "sharpe": 0.04,
+        "trades": 12,
+    }
+    await store.record_trials("trend", [trial, trial | {"sample": "out", "sharpe": 0.01}], at=NOW)
+    await store.record_trials("other", [trial | {"sharpe": 9.0}], at=NOW)
+    assert await store.trial_sharpes("trend") == [0.04]
+    assert await store.latest_validation("trend") is None
+    await store.save_validation(
+        "trend", params=None, passed=False, edge_r=0.0, report_sv="Klarade inte.", at=NOW
+    )
+    await store.save_validation(
+        "trend",
+        params={"entry_lookback": 55},
+        passed=True,
+        edge_r=0.4,
+        report_sv="Klarade.",
+        at=NOW + timedelta(days=1),
+    )
+    assert await store.latest_validation("trend") == (True, 0.4, {"entry_lookback": 55}, "Klarade.")

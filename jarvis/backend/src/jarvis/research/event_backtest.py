@@ -29,10 +29,17 @@ class Trade:
     entry_price: float
     exit_price: float
     costs: float
+    initial_stop: float = 0.0
 
     @property
     def pnl(self) -> float:
         return (self.exit_price - self.entry_price) * self.shares - self.costs
+
+    @property
+    def r_multiple(self) -> float:
+        """Result in units of the risk taken at entry (1R = the planned loss to the stop)."""
+        risk = (self.entry_price - self.initial_stop) * self.shares
+        return self.pnl / risk if risk > 0 else 0.0
 
 
 @dataclass(slots=True)
@@ -66,6 +73,7 @@ def run_event(
     entry_price = stop = 0.0
     entry_index = 0
     entry_cost = 0.0
+    initial_stop = 0.0
     pending_stop: float | None = None
 
     for i, bar in enumerate(bars):
@@ -76,7 +84,15 @@ def run_event(
             exit_cost = model.total(shares, exit_price, adv_shares)
             cash += shares * exit_price - exit_cost
             result.trades.append(
-                Trade(entry_index, i, shares, entry_price, exit_price, entry_cost + exit_cost)
+                Trade(
+                    entry_index,
+                    i,
+                    shares,
+                    entry_price,
+                    exit_price,
+                    entry_cost + exit_cost,
+                    initial_stop,
+                )
             )
             shares = 0
         # 2. a signal from the previous close is entered at this open
@@ -87,12 +103,13 @@ def run_event(
                 entry_cost = model.total(wanted, opened, adv_shares)
                 cash -= wanted * opened + entry_cost
                 shares, entry_price, stop, entry_index = wanted, opened, pending_stop, i
+                initial_stop = stop
                 if low <= stop:  # stopped out on the entry bar itself
                     exit_price = stop
                     exit_cost = model.total(shares, exit_price, adv_shares)
                     cash += shares * exit_price - exit_cost
                     result.trades.append(
-                        Trade(i, i, shares, entry_price, exit_price, entry_cost + exit_cost)
+                        Trade(i, i, shares, entry_price, exit_price, entry_cost + exit_cost, stop)
                     )
                     shares = 0
         pending_stop = None

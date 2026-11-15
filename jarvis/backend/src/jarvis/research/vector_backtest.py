@@ -76,13 +76,22 @@ def run_vector(
 
     result = BacktestResult()
     cash, shares, entry_price, stop, entry_index, entry_cost = capital, 0, 0.0, 0.0, 0, 0.0
+    initial_stop = 0.0
     for i in range(len(frame)):
         if shares and lows[i] <= stop:
             exit_price = min(opens[i], stop)
             exit_cost = model.total(shares, exit_price, adv_shares)
             cash += shares * exit_price - exit_cost
             result.trades.append(
-                Trade(entry_index, i, shares, entry_price, exit_price, entry_cost + exit_cost)
+                Trade(
+                    entry_index,
+                    i,
+                    shares,
+                    entry_price,
+                    exit_price,
+                    entry_cost + exit_cost,
+                    initial_stop,
+                )
             )
             shares = 0
         if i > 0 and signal[i - 1] and not shares and opens[i] > signal_stop[i - 1]:
@@ -91,11 +100,12 @@ def run_vector(
                 entry_cost = model.total(wanted, opens[i], adv_shares)
                 cash -= wanted * opens[i] + entry_cost
                 shares, entry_price, stop, entry_index = wanted, opens[i], signal_stop[i - 1], i
+                initial_stop = stop
                 if lows[i] <= stop:
                     exit_cost = model.total(shares, stop, adv_shares)
                     cash += shares * stop - exit_cost
                     result.trades.append(
-                        Trade(i, i, shares, entry_price, stop, entry_cost + exit_cost)
+                        Trade(i, i, shares, entry_price, stop, entry_cost + exit_cost, stop)
                     )
                     shares = 0
         if shares and not np.isnan(trail[i]):

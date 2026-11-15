@@ -11,6 +11,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -152,3 +153,32 @@ class AccountState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     at: Mapped[datetime] = mapped_column(UTC_TIME)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class ResearchTrial(Base):
+    """Every backtest variant ever tried, failures included (§6.3 item 9)."""
+
+    __tablename__ = "research_trials"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    at: Mapped[datetime] = mapped_column(UTC_TIME, index=True)
+    strategy: Mapped[str] = mapped_column(String(64), index=True)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    sample: Mapped[str] = mapped_column(String(16))
+    window: Mapped[int] = mapped_column(Integer)
+    sharpe: Mapped[float] = mapped_column(Float)
+    trades: Mapped[int] = mapped_column(Integer)
+
+
+class ValidationRow(Base):
+    """The outcome of a full validation. Only a passed one lets a strategy trade."""
+
+    __tablename__ = "validations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    at: Mapped[datetime] = mapped_column(UTC_TIME, index=True)
+    strategy: Mapped[str] = mapped_column(String(64), index=True)
+    params: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    passed: Mapped[bool] = mapped_column(Boolean)
+    edge_r: Mapped[float] = mapped_column(Float)
+    report_sv: Mapped[str] = mapped_column(Text)
