@@ -57,6 +57,15 @@ def test_every_default_is_the_number_in_the_spec() -> None:
                 "weekly_loss_pct": 4.0,
                 "kill_switch_drawdown_pct": 10.0,
                 "max_clock_drift_seconds": 1.0,
+                "max_consecutive_broker_errors": 5,  # D10
+                "max_quote_age_seconds": 60.0,  # D10
+            },
+            "order_safety": {  # §7, D10
+                "max_price_deviation_pct": 3.0,
+                "max_orders_per_minute": 10,
+                "max_orders_per_day": 50,
+                "avoid_open_minutes": 10,
+                "avoid_close_minutes": 10,
             },
             "turnover": {"max_annual_turnover_multiple": 10.0, "min_edge_to_cost_ratio": 2.0},
             "gap": {"single_stock_gap_pct": 25.0, "crypto_gap_pct": 40.0, "max_gap_loss_pct": 3.0},

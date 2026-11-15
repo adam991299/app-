@@ -2,6 +2,37 @@
 
 Viktiga beslut med motivering. Nyast överst.
 
+## 2026-11-15
+
+### D9. Jarvis ska kosta 0 kr i fasta kostnader (Adams krav)
+Adam: "Detta ska inte kosta något alls." Specen förutsätter en betald VPS, domän,
+marknadsdata och Claude API. Så här blir det gratis, och det här går **inte** att få gratis:
+
+| Behov | Gratis lösning | Vad det kostar i kvalitet |
+|---|---|---|
+| Server dygnet runt | Oracle Cloud Always Free (Arm, EU-region, t.ex. Stockholm) | Gratisnivån halverades 2026 till ca 2 kärnor/12 GB. Räcker för swing/position, inte för tung daytrading eller lokala AI-modeller. Kräver kort för identitetskontroll (debiteras inte). Ledig kapacitet i populära regioner kan saknas. |
+| Domän och HTTPS | Tailscale (gratis för privatpersoner) med adressen `*.ts.net` och eget certifikat | Ingen egen domän. Appen nås bara från Adams egna enheter — vilket specen ändå kräver (§10). |
+| Marknadsdata USA | IBKR:s gratis realtidsdata från Cboe One och IEX | Inte konsoliderad (ingen NBBO). Godtagbart för strategier på dagsbarer. |
+| Marknadsdata Norden, råvaror | Fördröjd data (10–20 min) gratis | Ingen realtid. Norden handlas bara med strategier som klarar fördröjningen, eller inte alls. |
+| Historik för backtest | IBKR:s historik (med pacing-gränser) och fria officiella källor | Kortare historik och survivorship bias. Dokumenteras ärligt i varje rapport. |
+| Nyhetsanalys | Regelbaserad analys och öppna modeller som körs på servern | Sämre tolkning än Claude, särskilt på svenska. |
+| "Fråga Jarvis" (chatt) | — | **Går inte att få bra gratis.** En språkmodell behövs. Utan API-nyckel stängs chatten av; resten av appen fungerar. |
+| Notiser, e-post, övervakning | Web Push, Adams egen e-post via SMTP, gratis upptidstjänst | Inget SMS. |
+| CI | GitHub Actions (gratis minuter räcker) | — |
+
+**Kostnader som aldrig blir noll när Jarvis handlar på riktigt:** courtage hos IBKR,
+valutaväxling, spread och ISK-skatten. Pappershandel kostar ingenting.
+
+**Beslut:** allt byggs för 0 kr. Funktioner som kräver Claude byggs utbytbara och står
+avstängda (budget 0 kr/dag) tills Adam eventuellt lägger in en nyckel. Inget av detta
+smyger in en betald tjänst. *Bekräftelse av chatt-frågan ställd till Adam.*
+
+### D10. Värden för ordersäkerhet som specen inte anger (§7)
+Valda försiktigt, och justerbara inom intervallen i config:
+max 3 % avvikelse mellan limitpris och senaste kurs; max 10 order per minut och 50 per
+dag; ingen ny position de första och sista 10 minuterna (specen: 5–10); stoppa handeln
+efter 5 fel i rad mot mäklaren; en kurs äldre än 60 sekunder räknas som gammal.
+
 ## 2026-11-14
 
 ### D1. Jarvis ligger i mappen `jarvis/` i det befintliga repot

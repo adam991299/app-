@@ -4,8 +4,8 @@ Ett helautomatiskt handelssystem som körs på en egen server, handlar via Inter
 och visas i en webbapp. Jarvis startar **alltid i pappershandel**. Riktig handel kan bara slås
 på av Adam själv i appen.
 
-> **Läget just nu:** Fas 0 (skelettet). Alla tjänster startar och svarar, men ingen handel,
-> ingen data och inga vyer finns ännu. Se [`docs/PLAN.md`](docs/PLAN.md) och
+> **Läget just nu:** Fas 0 är klar och Fas 0.5 pågår. Risk-motorn och en simulerad mäklare
+> finns och är testade. Ingen riktig handel, ingen marknadsdata och inga vyer finns ännu. Se [`docs/PLAN.md`](docs/PLAN.md) och
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 Jarvis lovar ingen vinst. Varje resultat jämförs med att bara äga en bred indexfond, efter
@@ -13,15 +13,22 @@ alla kostnader och skatt, och appen ska säga rakt ut om Jarvis inte slår den.
 
 ## Det här behöver Adam ordna
 
-- [ ] **IBKR-konto** (IBKR Ireland) med **ISK**, samt ett **Paper Trading-konto**
+Jarvis byggs för att kosta **0 kr i fasta kostnader** (beslut D9 i
+[`docs/DECISIONS.md`](docs/DECISIONS.md)). Allt nedan är gratis.
+
+- [x] **IBKR-konto** (Adam har ett). Kontrollera att det är ett **ISK**.
+- [ ] **Paper Trading-konto** hos IBKR: Client Portal → Settings → Paper Trading Account.
 - [ ] En **separat IBKR-användare** för boten, med handelsrättigheter men **utan rätt att ta
-      ut eller flytta pengar**
-- [ ] **Marknadsdata** hos IBKR för de börser som ska handlas (Nasdaq Nordic, USA,
-      råvarubörser). En kostnadslista tas fram i Fas 1, innan något beställs.
-- [ ] En **API-nyckel till Anthropic** (Claude) för nyhetsanalys
-- [ ] En **VPS i EU** (t.ex. Hetzner Helsingfors, 4 vCPU/8 GB RAM räcker att börja med) och
-      ett **domännamn**
-- [ ] **IBKR Mobile** på telefonen för att godkänna 2FA
+      ut eller flytta pengar** (Client Portal → Settings → Users & Access Rights).
+- [ ] **Gratis server dygnet runt:** ett konto hos Oracle Cloud (Always Free, region
+      Stockholm). Oracle kräver ett kort för identitetskontroll men debiterar det inte så
+      länge bara gratisresurser används.
+- [ ] **Tailscale** (gratis) på telefonen och datorn, så att appen bara nås från dina enheter.
+- [ ] **IBKR Mobile** på telefonen för att godkänna 2FA.
+
+**Det som inte blir gratis:** courtage, valutaväxling och ISK-skatt när Jarvis handlar på
+riktigt, och chatten "Fråga Jarvis", som kräver en betald språkmodell och därför är
+avstängd tills du eventuellt väljer att slå på den.
 
 **Ärligt om 2FA:** IB Gateway kräver ny inloggning med jämna mellanrum (normalt en gång i
 veckan), och då måste du godkänna med 2FA i mobilen. Jarvis kommer att skicka en push-notis

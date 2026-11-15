@@ -83,13 +83,15 @@ viktigaste; detaljer ett tryck bort.
 | Vad | Var | Kommando |
 |---|---|---|
 | Backend-kontroller | `backend/` | `uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest && uv run pip-audit --skip-editable` |
+| 100 %-kravet | `backend/` | `uv run coverage report --include='src/jarvis/risk/*,src/jarvis/broker/*' --fail-under=100` (lägg till `execution/` och `economics/` när de finns) |
 | Webb-kontroller | `web/` | `npm run lint && npm run typecheck && npm run build` |
 | Starta allt | `jarvis/` | `scripts/init-env.sh && docker compose up -d --build --wait` |
 | Röktest | `jarvis/` | `scripts/smoke.sh` |
 
 ## Struktur
-- `backend/src/jarvis/` — Python-paketet (en modul per ansvar: `config/`, `service/`, senare
-  `risk/`, `execution/`, `broker/`, `economics/` …)
+- `backend/src/jarvis/` — Python-paketet, en modul per ansvar: `config/`, `service/`,
+  `domain/` (delade typer), `risk/`, `broker/` (`BrokerAdapter`, `SimBroker`), senare
+  `execution/`, `economics/` …
 - `web/` — Next.js-appen (PWA)
 - `config/default.yaml` — standardvärden från specen, validerade vid start
 - `deploy/` — Caddy, Prometheus

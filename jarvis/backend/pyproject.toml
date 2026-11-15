@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Jarvis the Trader — backend services"
 requires-python = ">=3.12"
 dependencies = [
+    "exchange-calendars>=4.6",
     "fastapi>=0.115",
     "pydantic>=2.9",
     "pyyaml>=6.0",
@@ -15,6 +16,7 @@ dev = [
     "httpx2>=1.0",
     "hypothesis>=6.100",
     "mypy>=1.13",
+    "pandas-stubs>=3.1.0.261029",
     "pip-audit>=2.7",
     "pytest>=8.3",
     "pytest-cov>=6.0",
@@ -44,9 +46,15 @@ strict = true
 python_version = "3.12"
 files = ["src", "tests"]
 
+[[tool.mypy.overrides]]
+module = ["exchange_calendars", "exchange_calendars.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=jarvis --cov-branch --cov-report=term-missing --cov-fail-under=85"
+# Deprecations raised inside pandas when exchange_calendars calls it; not our code.
+filterwarnings = ["error", "ignore::pandas.errors.Pandas4Warning"]
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]

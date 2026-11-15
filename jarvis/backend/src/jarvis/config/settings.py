@@ -112,6 +112,8 @@ class CircuitBreakers(_Section):
     weekly_loss_pct: float = Field(default=4.0, ge=1.0, le=10.0)
     kill_switch_drawdown_pct: float = Field(default=10.0, ge=2.0, le=20.0)
     max_clock_drift_seconds: float = Field(default=1.0, gt=0, le=1.0)
+    max_consecutive_broker_errors: int = Field(default=5, ge=1, le=20)
+    max_quote_age_seconds: float = Field(default=60.0, gt=0, le=300)
 
     @model_validator(mode="after")
     def _escalating(self) -> Self:
@@ -120,6 +122,16 @@ class CircuitBreakers(_Section):
                 "circuit breakers must escalate: daily < weekly < kill switch drawdown"
             )
         return self
+
+
+class OrderSafety(_Section):
+    """Fat-finger and timing guards (§7 Ordersäkerhet). Defaults are decision D10."""
+
+    max_price_deviation_pct: float = Field(default=3.0, gt=0, le=10)
+    max_orders_per_minute: int = Field(default=10, ge=1, le=60)
+    max_orders_per_day: int = Field(default=50, ge=1, le=500)
+    avoid_open_minutes: int = Field(default=10, ge=5, le=60)
+    avoid_close_minutes: int = Field(default=10, ge=5, le=60)
 
 
 class Turnover(_Section):
@@ -162,6 +174,7 @@ class Risk(_Section):
     per_trade: PerTradeRisk = PerTradeRisk()
     portfolio: PortfolioRisk = PortfolioRisk()
     circuit_breakers: CircuitBreakers = CircuitBreakers()
+    order_safety: OrderSafety = OrderSafety()
     turnover: Turnover = Turnover()
     gap: GapRisk = GapRisk()
     technical_max: TechnicalMax = TechnicalMax()

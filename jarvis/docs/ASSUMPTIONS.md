@@ -19,12 +19,16 @@ flyttas då till "Verifierat" med datum och källa.
 | A9 | Format och villkor för Senatens eFD och representanthusets Clerk. | Fas 4.2 |
 | A10 | Att KBLab:s svenska Whisper-modell finns och hur den presterar. | Fas 6.5 |
 | A11 | Årets skattefria grundnivå och schablonsats för ISK. Fälten i `config/default.yaml` är därför tomma, och ekonomimodulen ska vägra räkna skatt tills de är ifyllda från Skatteverket. | Ekonomimodulen |
+| A13 | Att IBKR:s papperskonto får samma gratis realtidsdata (Cboe One/IEX) som huvudkontot. | Fas 0.5 |
+| A14 | Oracle Cloud Always Free: exakt gräns efter 2026 års sänkning (rapporterat 2 OCPU/12 GB) och att Stockholm-regionen har ledig kapacitet. | Fas 7 |
 | A12 | IBKR:s tider för daglig omstart och intervallet för ny 2FA-inloggning (specen anger "normalt en gång i veckan"). | Fas 0.5 |
 
 ## Verifierat
 
 | Datum | Vad | Källa |
 |---|---|---|
+| 2026-11-15 | IBKR erbjuder gratis realtidsdata (ej konsoliderad) för amerikanska aktier och ETF:er från Cboe One och IEX; fördröjd data släpar 10–20 min. | interactivebrokers.com, sidan Market Data Pricing |
+| 2026-11-15 | `gnzsnz/ib-gateway` publiceras för både amd64 och arm64 (krävs för Oracles gratisservrar). | hub.docker.com/r/gnzsnz/ib-gateway/tags |
 | 2026-11-14 | `ib_async` underhålls: version 2.1.0 släpptes 2025-12-08. Kontrolleras igen innan broker-koden skrivs, eftersom senaste släpp då är snart ett år gammalt. | pypi.org/pypi/ib_async |
 | 2026-11-14 | Next.js 16.4.6 är aktuell version; appen bygger med App Router och TypeScript strict. | registry.npmjs.org, `npm run build` |
 

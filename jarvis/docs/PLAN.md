@@ -51,17 +51,35 @@ Repo-struktur, Docker Compose, CI (lint, typkontroll, tester), `README.md` på s
 - [x] Granskning av separat agent, fynd åtgärdade
 - [x] Acceptanskravet verifierat i CI (se `PROGRESS.md`)
 
-### ⏳ Fas 0.5 – Den tunna versionen hela vägen
+### 🔨 Fas 0.5 – Den tunna versionen hela vägen
 Amerikanska aktier, en strategi, IBKR Paper, risk-engine med nödstopp, avstämning, test- och
 live-miljöer (§11), och en enkel men redan snygg hemskärm enligt §9.1.
 **Acceptanskrav:** Körs automatiskt i minst 10 handelsdagar utan fel eller manuella ingrepp
 (utöver 2FA). Varje affär går att följa från signal till fyllnad. Kill switch testad.
 Hemskärmen granskad med skärmdumpar.
 
-Kan byggas utan Adam (mot `SimBroker`): delade gränssnitt, databasschema, `BrokerAdapter` +
-`SimBroker`, risk-engine med nödstopp, order-tillståndsmaskin, avstämning, trendföljnings-
-strategi, hemskärm. **Kräver Adam:** IBKR Paper-inloggning, VPS och domän (för de 10
-handelsdagarna).
+Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
+- [x] Delade typer (`domain/`): instrument, kurs, position, konto — pengar alltid `Decimal`
+- [x] `BrokerAdapter` och `SimBroker` (kontantkonto: ingen blankning, ingen belåning,
+      bracket med stopp hos mäklaren, delfyllnader, idempotenta order-ID, felinjektion)
+- [x] Risk-engine: positionsstorlek, kontroller före varje order, circuit breakers,
+      kill switch, hälsostopp (anslutning, fel i rad, klocka, avstämning)
+- [x] CI kräver 100 % täckning i `risk/` och `broker/`
+- [ ] Granskning av risk och broker, fynd åtgärdade
+- [ ] Databasschema och lagring av kill switch, paus, equity-toppar och affärsjournal
+- [ ] `execution/`: order-tillståndsmaskin, idempotens vid omstart, avstämning varje minut
+- [ ] Börskalender (`exchange_calendars`) för öppettider och sommartid
+- [ ] Trendföljningsstrategi på dagsbarer (amerikanska aktier)
+- [ ] Hemskärm enligt §9.1 med status, innehav och affärer
+- [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**
+- [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
+- [ ] 10 handelsdagar automatisk pappershandel
+
+**Skjuts uttryckligen till Fas 5** (risk-delar som kräver data som inte finns än):
+korrelationskontroll, max affärer per vecka och årlig omsättning, daglig stresstest mot
+historiska krascher, rapportskydd, kontroll av handelsstatus (stoppad/auktion), nattläge,
+daytrading-gränser. Fram till dess handlar den tunna versionen bara en strategi på
+dagsbarer, där dessa delar har minst betydelse.
 
 ### ⬜ Fas 1 – Data
 Kalendrar, universum, historik- och realtidsdata från IBKR Paper, datakvalitetskontroller.
