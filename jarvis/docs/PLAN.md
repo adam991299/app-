@@ -35,7 +35,7 @@ kalendertid och kräver en VPS som är igång dygnet runt. Allt annat byggs unde
 
 ## Faser
 
-### 🔨 Fas 0 – Plan och skelett
+### ✅ Fas 0 – Plan och skelett
 Repo-struktur, Docker Compose, CI (lint, typkontroll, tester), `README.md` på svenska,
 `docs/ASSUMPTIONS.md`, och config-system med validering.
 **Acceptanskrav:** `docker compose up` startar alla tomma tjänster, och CI är grön.
@@ -48,8 +48,8 @@ Repo-struktur, Docker Compose, CI (lint, typkontroll, tester), `README.md` på s
 - [x] Docker Compose med alla tjänster i §2; bara Caddy publicerar en port (443)
 - [x] CI: backend (ruff, mypy strict, pytest), webb (eslint, tsc, build), compose-röktest
 - [x] README på svenska
-- [ ] Granskning av separat agent, fynd åtgärdade
-- [ ] Acceptanskravet verifierat i CI (se `PROGRESS.md`)
+- [x] Granskning av separat agent, fynd åtgärdade
+- [x] Acceptanskravet verifierat i CI (se `PROGRESS.md`)
 
 ### ⏳ Fas 0.5 – Den tunna versionen hela vägen
 Amerikanska aktier, en strategi, IBKR Paper, risk-engine med nödstopp, avstämning, test- och
