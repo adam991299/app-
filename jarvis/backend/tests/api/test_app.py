@@ -1,0 +1,262 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
+import httpx2 as httpx
+import pytest
+
+from jarvis.api.app import create_api_app
+from jarvis.api.views import _briefing, _count_sv
+from jarvis.broker.models import Fill
+from jarvis.config.settings import Settings
+from jarvis.domain import Side
+from jarvis.store.repo import NewOrder, Store
+
+D = Decimal
+NOW = datetime(2026, 11, 16, 18, tzinfo=UTC)  # Monday 13:00 in New York: open
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = NOW
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+@pytest.fixture
+def clock() -> Clock:
+    return Clock()
+
+
+@pytest.fixture
+async def client(store: Store, clock: Clock) -> AsyncIterator[httpx.AsyncClient]:
+    app = create_api_app(store, Settings(), clock)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://api") as c:
+        yield c
+
+
+def state(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "base_currency": "SEK",
+        "net_liquidation": "100482.35",
+        "cash": "81250.10",
+        "positions": [
+            {
+                "symbol": "MSFT",
+                "quantity": 12,
+                "currency": "USD",
+                "average_price": "512.40",
+                "last_price": "518.90",
+                "market_value": "9872.00",
+                "unrealized_pnl": "742.10",
+                "unrealized_pnl_pct": "1.27",
+                "stop_price": "489.00",
+                "strategy": "trend",
+            }
+        ],
+        "trading_state": "active",
+        "reasons": [],
+        "broker_connected": True,
+        "reconciled": True,
+    }
+    return base | overrides
+
+
+async def test_without_any_state_the_app_is_told_honestly(client: httpx.AsyncClient) -> None:
+    status = (await client.get("/status")).json()
+    assert status["trading_state"] == "halted"
+    assert status["reasons"][0]["code"] == "no_state"
+    assert status["mode"] == "paper"
+    assert status["broker_connected"] is False
+    assert status["markets"][0]["name_sv"] == "USA"
+    portfolio = (await client.get("/portfolio")).json()
+    assert portfolio["net_liquidation"] is None
+    assert portfolio["positions"] == []
+    assert (await client.get("/trades")).json() == {"trades": []}
+    today = (await client.get("/today")).json()
+    assert today == {
+        "trades_count": 0,
+        "realized_pnl": None,
+        "risk_level_sv": today["risk_level_sv"],
+    }
+
+
+async def test_status_and_portfolio_from_state(
+    client: httpx.AsyncClient, store: Store, clock: Clock
+) -> None:
+    await store.record_equity(at=NOW - timedelta(days=1), net_liquidation=D(100000), cash=D(1))
+    await store.record_equity(at=NOW, net_liquidation=D("100482.35"), cash=D(1))
+    await store.save_account_state(state(), at=NOW)
+    status = (await client.get("/status")).json()
+    assert status["trading_state"] == "active"
+    assert status["broker_connected"] is True
+    usa = status["markets"][0]
+    assert (usa["is_open"], usa["closes_at"]) == (True, "2026-11-16T21:00:00Z")
+    assert status["briefing_sv"] == "En position är öppen. Allt inom riskramarna. USA är öppen."
+    portfolio = (await client.get("/portfolio")).json()
+    assert portfolio["net_liquidation"] == "100482.35"
+    assert portfolio["day_change"] == "482.35"
+    assert portfolio["day_change_pct"] == "0.48"
+    assert portfolio["positions"][0]["stop_price"] == "489.00"
+    assert portfolio["positions"][0]["strategy"] == "Trendföljning"
+
+
+async def test_blocked_state_carries_swedish_reasons(
+    client: httpx.AsyncClient, store: Store
+) -> None:
+    await store.save_account_state(
+        state(trading_state="kill_switch", reasons=["kill_switch_engaged"], positions=[]), at=NOW
+    )
+    status = (await client.get("/status")).json()
+    assert status["reasons"] == [
+        {
+            "code": "kill_switch_engaged",
+            "message_sv": "Kill switch är aktiv. Du behöver starta handeln igen i appen.",
+        }
+    ]
+    assert status["briefing_sv"].startswith(
+        "Inga positioner är öppna. Inga nya affärer tas just nu."
+    )
+
+
+async def test_stale_state_halts(client: httpx.AsyncClient, store: Store, clock: Clock) -> None:
+    await store.save_account_state(state(), at=NOW)
+    clock.now = NOW + timedelta(minutes=4)
+    status = (await client.get("/status")).json()
+    assert status["trading_state"] == "halted"
+    assert "flera minuter" in status["reasons"][0]["message_sv"]
+
+
+async def test_closed_market_shows_next_session(
+    client: httpx.AsyncClient, store: Store, clock: Clock
+) -> None:
+    clock.now = datetime(2026, 11, 14, 12, tzinfo=UTC)  # Saturday
+    await store.save_account_state(state(positions=[]), at=clock.now)
+    usa = (await client.get("/status")).json()["markets"][0]
+    assert usa["is_open"] is False
+    assert usa["opens_at"] == "2026-11-16T14:30:00Z"
+    assert usa["closes_at"] == "2026-11-16T21:00:00Z"
+
+
+async def test_market_outside_the_calendar_has_no_times(
+    client: httpx.AsyncClient, store: Store, clock: Clock
+) -> None:
+    clock.now = datetime(2031, 1, 1, tzinfo=UTC)
+    usa = (await client.get("/status")).json()["markets"][0]
+    assert (usa["opens_at"], usa["closes_at"]) == (None, None)
+
+
+async def test_nordic_market_listed_when_enabled(store: Store, clock: Clock) -> None:
+    settings = Settings.model_validate({"markets": {"nordic_equities": True}})
+    app = create_api_app(store, settings, clock)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a") as c:
+        names = [m["name_sv"] for m in (await c.get("/status")).json()["markets"]]
+    assert names == ["USA", "Stockholm"]
+
+
+async def test_trades_explain_entries_and_exits(client: httpx.AsyncClient, store: Store) -> None:
+    def order(cid: str, kind: str, side: str, **kw: Any) -> NewOrder:
+        return NewOrder(
+            cid,
+            kind,
+            "MSFT",
+            side,
+            12,
+            kw.get("limit"),
+            kw.get("stop"),
+            strategy="trend",
+            explanation_sv=kw.get("why"),
+            currency="USD",
+            parent_id=kw.get("parent"),
+        )
+
+    await store.add_order(
+        order(
+            "e",
+            "entry",
+            "buy",
+            limit=D(512),
+            stop=D(489),
+            why="Kursen bröt över sin högsta nivå på 55 dagar.",
+        ),
+        at=NOW,
+    )
+    await store.add_order(order("e.stop", "stop", "sell", stop=D(489), parent="e"), at=NOW)
+    await store.add_order(order("e.tp", "take_profit", "sell", limit=D(600), parent="e"), at=NOW)
+    await store.add_order(
+        order("x", "exit", "sell", limit=D(500), why="Manuell stängning."), at=NOW
+    )
+    for i, (cid, side) in enumerate(
+        [("e", Side.BUY), ("e.stop", Side.SELL), ("e.tp", Side.SELL), ("x", Side.SELL)]
+    ):
+        await store.record_fill(
+            Fill(f"f{i}", cid, "MSFT", side, 3, D("512.40"), D(1), NOW + timedelta(minutes=i))
+        )
+    trades = (await client.get("/trades", params={"limit": 10})).json()["trades"]
+    assert [t["id"] for t in trades] == ["f3", "f2", "f1", "f0"]
+    assert trades[3]["explanation_sv"] == "Kursen bröt över sin högsta nivå på 55 dagar."
+    assert trades[2]["explanation_sv"] == "Stoppen hos mäklaren utlöstes. Såld till 512,40."
+    assert trades[1]["explanation_sv"] == "Målkursen 600,00 nåddes."
+    assert trades[0]["explanation_sv"] == "Manuell stängning."
+    assert trades[0]["currency"] == "USD"
+    assert trades[0]["strategy"] == "Trendföljning"
+    assert trades[0]["price"] == "512.40"
+    assert trades[0]["commission"] == "1.00"
+    assert (await client.get("/today")).json()["trades_count"] == 4
+    assert (await client.get("/trades", params={"limit": 0})).status_code == 422
+
+
+def test_briefing_wording() -> None:
+    assert _count_sv(3) == "Tre"
+    assert _count_sv(12) == "12"
+    soon = datetime(2026, 11, 16, 14, 0, tzinfo=UTC)
+    from jarvis.api.schemas import MarketOut
+
+    market = MarketOut(
+        exchange="XNYS",
+        name_sv="USA",
+        is_open=False,
+        opens_at=datetime(2026, 11, 16, 14, 30, tzinfo=UTC),
+        closes_at=None,
+    )
+    payload = {"positions": [{}, {}], "trading_state": "active"}
+    assert _briefing(payload, [market], soon) == (
+        "Två positioner är öppna. Allt inom riskramarna. USA öppnar inom en timme."
+    )
+    later = datetime(2026, 11, 16, 10, 0, tzinfo=UTC)
+    assert _briefing(payload, [market], later).endswith("USA öppnar om 4 timmar.")
+    assert _briefing(payload, [], later) == "Två positioner är öppna. Allt inom riskramarna."
+
+
+async def test_state_without_equity_history_has_no_day_change(
+    client: httpx.AsyncClient, store: Store
+) -> None:
+    await store.save_account_state(state(net_liquidation="1000.123456"), at=NOW)
+    portfolio = (await client.get("/portfolio")).json()
+    assert portfolio["day_change"] is None
+    assert portfolio["net_liquidation"] == "1000.123456"
+
+
+async def test_no_markets_listed_when_none_enabled(store: Store, clock: Clock) -> None:
+    settings = Settings.model_validate({"markets": {"us_equities": False}})
+    app = create_api_app(store, settings, clock)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a") as c:
+        assert (await c.get("/status")).json()["markets"] == []
+
+
+def test_swedish_number_in_sentences() -> None:
+    from jarvis.api.views import _sv
+
+    assert _sv(D("12345.6")) == "12 345,60"
+
+
+def test_unknown_strategy_ids_are_shown_as_they_are() -> None:
+    from jarvis.api.views import strategy_sv
+
+    assert strategy_sv("experiment-7") == "experiment-7"
+    assert strategy_sv(None) is None

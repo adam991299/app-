@@ -89,9 +89,36 @@ def test_service_starts_with_valid_config(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.delenv("JARVIS_CONFIG_OVERRIDE", raising=False)
     calls: list[dict[str, object]] = []
     monkeypatch.setattr("uvicorn.run", lambda app, **k: calls.append({"app": app, **k}))
-    assert entrypoint.main(["--name", "api", "--port", "9000"]) == 0
+    assert entrypoint.main(["--name", "risk-engine", "--port", "9000"]) == 0
     assert calls[0]["port"] == 9000
     assert calls[0]["log_config"] is None
+
+
+def test_api_refuses_to_start_without_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    good = tmp_path / "good.yaml"
+    good.write_text("", encoding="utf-8")
+    monkeypatch.setenv("JARVIS_CONFIG", str(good))
+    monkeypatch.delenv("JARVIS_DATABASE_URL", raising=False)
+    started: list[object] = []
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: started.append(a))
+    assert entrypoint.main(["--name", "api"]) == 1
+    assert started == []
+
+
+def test_api_migrates_and_serves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database_url: str
+) -> None:
+    good = tmp_path / "good.yaml"
+    good.write_text("", encoding="utf-8")
+    monkeypatch.setenv("JARVIS_CONFIG", str(good))
+    monkeypatch.setenv("JARVIS_DATABASE_URL", database_url)
+    apps: list[object] = []
+    monkeypatch.setattr("uvicorn.run", lambda app, **k: apps.append(app))
+    assert entrypoint.main(["--name", "api"]) == 0
+    routes = {getattr(r, "path", "") for r in apps[0].routes}  # type: ignore[attr-defined]
+    assert {"/status", "/portfolio", "/trades", "/today", "/healthz"} <= routes
 
 
 def test_unknown_service_name_is_rejected() -> None:

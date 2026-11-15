@@ -77,7 +77,10 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
 - [ ] Körslinga som matar strategin med dagsbarer och skickar signalerna till orderhanteringen
 - [x] Hemskärm enligt §9.1: orb, status, kontovärde, idag, marknader, innehav, affärer,
       tomma lägen, felläge; skärmdumpar i `docs/screenshots/` (med exempeldata)
-- [ ] API-tjänsten som ger hemskärmen riktig data (`/status`, `/portfolio`, `/trades`, `/today`)
+- [x] API-tjänsten som ger hemskärmen riktig data (`/status`, `/portfolio`, `/trades`, `/today`),
+      migrerar databasen vid start; orderhanteringen sparar läget efter varje avstämning.
+      Hela kedjan provkörd: simulerad mäklare → orderhantering → databas → API → app
+      (`docs/screenshots/home-live-sim-*.png`)
 - [ ] Hemskärmens e2e-kontroll (`npm run e2e`) i CI
 - [x] Granskning av `execution/`, fem fel rättade med test (D17)
 - [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**

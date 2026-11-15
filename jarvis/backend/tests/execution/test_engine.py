@@ -614,3 +614,44 @@ async def test_raise_stop_reports_outage_when_moving_the_stop(world: World) -> N
 
     world.sim.modify_stop = down  # type: ignore[method-assign]
     assert (await world.engine.raise_stop(cid, D(97))).outcome is Outcome.BROKER_UNAVAILABLE
+
+
+async def test_reconcile_publishes_the_account_state_for_the_app(world: World) -> None:
+    await world.engine.submit_entry(signal())
+    world.price("AAPL", "102")
+    assert await world.engine.reconcile()
+    stored = await world.store.account_state()
+    assert stored is not None
+    at, payload = stored
+    assert at == NOW
+    assert payload["trading_state"] == "active"
+    assert payload["reconciled"] is True
+    position = payload["positions"][0]
+    assert position["symbol"] == "AAPL"
+    assert position["quantity"] == 50
+    assert position["market_value"] == "5100.00"
+    assert position["unrealized_pnl"] == "100.00"
+    assert position["unrealized_pnl_pct"] == "2.00"
+    assert position["stop_price"] == "95"
+    assert position["strategy"] == "trend"
+    assert position["currency"] == "USD"
+
+
+async def test_published_state_without_a_quote_leaves_values_empty(world: World) -> None:
+    await world.engine.submit_entry(signal())
+    world.prices.pop("AAPL")
+    await world.engine.reconcile()
+    stored = await world.store.account_state()
+    assert stored is not None
+    position = stored[1]["positions"][0]
+    assert (position["last_price"], position["market_value"]) == (None, None)
+
+
+async def test_published_state_for_an_unknown_holding(world: World) -> None:
+    world.price("MSFT", "50")
+    await world.sim.submit(OrderRequest("m", MSFT, Side.BUY, 1, D(50), D(45)))
+    await world.engine.reconcile()
+    stored = await world.store.account_state()
+    assert stored is not None
+    assert stored[1]["reconciled"] is False
+    assert stored[1]["positions"][0]["currency"] is None

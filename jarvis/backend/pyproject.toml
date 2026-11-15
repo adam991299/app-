@@ -64,5 +64,9 @@ filterwarnings = ["error", "ignore::pandas.errors.Pandas4Warning"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
+[tool.coverage.run]
+# SQLAlchemy's async layer runs code in greenlets; without this some lines look unrun.
+concurrency = ["greenlet", "thread"]
+
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]

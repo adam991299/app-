@@ -6,6 +6,8 @@ WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/src ./src
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/migrations ./migrations
 RUN uv sync --frozen --no-dev
 COPY config /app/config
 RUN useradd --system --uid 10001 jarvis

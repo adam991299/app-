@@ -4,6 +4,13 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D19. Appen läser en lägesrapport, inte mäklaren direkt
+Orderhanteringen sparar efter varje avstämning en lägesrapport (kontovärde, innehav, läge,
+skäl) i databasen. API:t läser bara den, så appen behöver ingen egen kontakt med mäklaren.
+Är rapporten äldre än 3 minuter visar appen "Stoppad" med förklaringen att handelsdelen inte
+hörts av. "Resultat i dag" visas som "–" tills realiserat resultat räknas ut av
+ekonomimodulen; risknivån heter "Standard" (specens gränser) tills reglagen i Fas 6 finns.
+
 ### D18. Trendstrategin: regler nu, förväntad vinst först efter backtest
 Strategin (55 dagars utbrott, stopp 2 × ATR, glidande stopp på 20 dagars lägsta; fyra
 parametrar) är byggd som rena regler. Risk-motorn kräver en förväntad vinst på minst

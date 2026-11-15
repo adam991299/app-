@@ -18,6 +18,7 @@ from jarvis.risk.breakers import EquityMarks
 from jarvis.store.db import session_factory
 from jarvis.store.periods import day_start, week_start
 from jarvis.store.tables import (
+    AccountState,
     AuditEntry,
     Controls,
     EquitySnapshot,
@@ -49,6 +50,7 @@ class NewOrder:
     parent_id: str | None = None
     explanation_sv: str | None = None
     signal: dict[str, Any] | None = None
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +67,19 @@ class StoredOrder:
     strategy: str | None
     limit_price: Decimal | None
     stop_price: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
+class TradeRecord:
+    """A fill together with what Jarvis journaled about the order behind it."""
+
+    fill: Fill
+    kind: str
+    strategy: str | None
+    explanation_sv: str | None
+    stop_price: Decimal | None
+    limit_price: Decimal | None
+    currency: str | None
 
 
 def _stored(row: OrderRow) -> StoredOrder:
@@ -246,6 +261,7 @@ class Store:
                     filled_quantity=0,
                     explanation_sv=order.explanation_sv,
                     signal=order.signal or {},
+                    currency=order.currency,
                     created_at=at,
                     updated_at=at,
                 )
@@ -351,24 +367,78 @@ class Store:
             rows = await session.execute(select(FillRow.symbol, signed).group_by(FillRow.symbol))
             return {symbol: int(qty) for symbol, qty in rows if qty}
 
+    async def save_account_state(self, payload: dict[str, Any], *, at: datetime) -> None:
+        async with self._sessions.begin() as session:
+            await session.execute(
+                insert(AccountState)
+                .values(id=1, at=at, payload=payload)
+                .on_conflict_do_update(
+                    index_elements=[AccountState.id], set_={"at": at, "payload": payload}
+                )
+            )
+
+    async def account_state(self) -> tuple[datetime, dict[str, Any]] | None:
+        async with self._sessions() as session:
+            row = await session.get(AccountState, 1)
+            return (row.at, row.payload) if row is not None else None
+
+    async def recent_trades(self, limit: int) -> list[TradeRecord]:
+        async with self._sessions() as session:
+            rows = await session.execute(
+                select(FillRow, OrderRow)
+                .join(OrderRow, OrderRow.client_order_id == FillRow.client_order_id)
+                .order_by(FillRow.at.desc(), FillRow.fill_id.desc())
+                .limit(limit)
+            )
+            return [
+                TradeRecord(
+                    fill=_fill(f),
+                    kind=o.kind,
+                    strategy=o.strategy,
+                    explanation_sv=o.explanation_sv,
+                    stop_price=o.stop_price,
+                    limit_price=o.limit_price,
+                    currency=o.currency,
+                )
+                for f, o in rows
+            ]
+
+    async def count_fills_since(self, since: datetime) -> int:
+        async with self._sessions() as session:
+            count = await session.scalar(
+                select(func.count()).select_from(FillRow).where(FillRow.at >= since)
+            )
+            return int(count or 0)
+
+    async def entry_strategies(self) -> dict[str, str]:
+        """The strategy of the most recent entry per symbol (who owns the position)."""
+        async with self._sessions() as session:
+            rows = await session.execute(
+                select(OrderRow.symbol, OrderRow.strategy)
+                .where(OrderRow.kind == "entry", OrderRow.filled_quantity > 0)
+                .order_by(OrderRow.created_at)
+            )
+            return {symbol: strategy for symbol, strategy in rows if strategy}
+
     async def fills_since(self, since: datetime) -> list[Fill]:
         async with self._sessions() as session:
             rows = await session.scalars(
                 select(FillRow).where(FillRow.at >= since).order_by(FillRow.at, FillRow.fill_id)
             )
-            return [
-                Fill(
-                    r.fill_id,
-                    r.client_order_id,
-                    r.symbol,
-                    Side(r.side),
-                    r.quantity,
-                    r.price,
-                    r.commission,
-                    r.at,
-                )
-                for r in rows
-            ]
+            return [_fill(r) for r in rows]
+
+
+def _fill(r: FillRow) -> Fill:
+    return Fill(
+        r.fill_id,
+        r.client_order_id,
+        r.symbol,
+        Side(r.side),
+        r.quantity,
+        r.price,
+        r.commission,
+        r.at,
+    )
 
 
 async def _latest_before(

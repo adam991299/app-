@@ -24,12 +24,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from jarvis.broker import (
     BrokerAdapter,
     BrokerError,
     BrokerOrder,
+    BrokerPosition,
     BrokerUnavailableError,
     DuplicateOrderIdError,
     OrderRequest,
@@ -114,6 +115,7 @@ class ExecutionEngine:
         clock: Callable[[], datetime],
         clock_drift: Callable[[], float],
         alerts: Alerts,
+        base_currency: str = "SEK",
     ) -> None:
         self._broker = broker
         self._store = store
@@ -125,6 +127,7 @@ class ExecutionEngine:
         self._clock = clock
         self._clock_drift = clock_drift
         self._alerts = alerts
+        self._base_currency = base_currency
         self._broker_errors = 0
         self._reconciled = False
         self._problems: set[str] = set()  # keys found since the current reconciliation began
@@ -305,6 +308,7 @@ class ExecutionEngine:
                 stop_price=request.stop_price,
                 strategy=signal.strategy,
                 explanation_sv=signal.explanation_sv,
+                currency=request.instrument.currency,
                 signal={
                     "expected_edge": str(signal.expected_edge),
                     "estimated_cost": str(signal.estimated_cost),
@@ -332,6 +336,7 @@ class ExecutionEngine:
                     stop_price=stop,
                     strategy=signal.strategy,
                     parent_id=request.client_order_id,
+                    currency=request.instrument.currency,
                 ),
                 at=now,
             )
@@ -500,10 +505,11 @@ class ExecutionEngine:
                 f"Jag saknar uppgifter om innehavet {', '.join(unknown)}.",
             )
         try:
-            covered = (await self._active_stops(orders)).coverage
+            active = await self._active_stops(orders)
         except BrokerError:
             self._reconciled = False
             return False
+        covered = active.coverage
         unprotected = sorted(s for s, q in actual.items() if covered.get(s, 0) < q)
         if unprotected:
             await self._problem(
@@ -512,7 +518,55 @@ class ExecutionEngine:
             )
         self._alerted &= self._problems
         self._reconciled = not self._problems
+        await self._store.save_account_state(
+            {**await self._state_payload(now, snapshot, active), "reconciled": self._reconciled},
+            at=now,
+        )
         return self._reconciled
+
+    async def _state_payload(
+        self, now: datetime, snapshot: _Snapshot, stops: _Stops
+    ) -> dict[str, Any]:
+        """What the app shows (see ``api/state.py``). Values are exact decimal strings."""
+        status = await self.trading_status(now)
+        strategies = await self._store.entry_strategies()
+        positions = []
+        for bp in snapshot.positions:
+            instrument = self._instruments.get(bp.symbol)
+            quote = await self._quotes(instrument) if instrument is not None else None
+            entry: dict[str, Any] = {
+                "symbol": bp.symbol,
+                "quantity": bp.quantity,
+                "currency": instrument.currency if instrument is not None else None,
+                "average_price": str(bp.average_cost),
+                "last_price": None,
+                "market_value": None,
+                "unrealized_pnl": None,
+                "unrealized_pnl_pct": None,
+                "stop_price": _text(stops.levels.get(bp.symbol)),
+                "strategy": strategies.get(bp.symbol),
+            }
+            if quote is not None:
+                value = bp.quantity * quote.last * quote.fx_to_base
+                pnl = (quote.last - bp.average_cost) * bp.quantity * quote.fx_to_base
+                entry |= {
+                    "last_price": str(quote.last),
+                    "market_value": str(value.quantize(_CENT)),
+                    "unrealized_pnl": str(pnl.quantize(_CENT)),
+                    "unrealized_pnl_pct": str(
+                        ((quote.last / bp.average_cost - 1) * 100).quantize(_CENT)
+                    ),
+                }
+            positions.append(entry)
+        return {
+            "base_currency": self._base_currency,
+            "net_liquidation": str(snapshot.account.net_liquidation),
+            "cash": str(snapshot.account.cash),
+            "positions": positions,
+            "trading_state": status.state.value,
+            "reasons": [r.value for r in status.reasons],
+            "broker_connected": self._broker.is_connected(),
+        }
 
     async def _snapshot(self) -> _Snapshot:
         await self.sync()
@@ -521,6 +575,7 @@ class ExecutionEngine:
         orders = await self._call(self._broker.open_orders())
         return _Snapshot(
             account=account,
+            positions=positions,
             orders=orders,
             booked=await self._store.booked_positions(),
             actual={p.symbol: p.quantity for p in positions},
@@ -616,6 +671,7 @@ def _child_ids(request: OrderRequest) -> list[str]:
 @dataclass(frozen=True, slots=True)
 class _Snapshot:
     account: Account
+    positions: tuple[BrokerPosition, ...]
     orders: tuple[BrokerOrder, ...]
     booked: dict[str, int]
     actual: dict[str, int]
@@ -625,6 +681,13 @@ class _Snapshot:
 class _Stops:
     coverage: dict[str, int]  # shares really protected, per symbol
     levels: dict[str, Decimal]  # the lowest active stop, per symbol
+
+
+_CENT = Decimal("0.01")
+
+
+def _text(value: Decimal | None) -> str | None:
+    return None if value is None else str(value)
 
 
 def _identity_mismatch(stored: StoredOrder, view: BrokerOrder) -> str | None:

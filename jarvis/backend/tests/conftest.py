@@ -15,17 +15,17 @@ from collections.abc import AsyncIterator, Callable, Iterator
 
 import psycopg
 import pytest
-from alembic import command
-from alembic.config import Config
 from pytest_postgresql import factories
 from pytest_postgresql.executors.noop import NoopExecutor
 from pytest_postgresql.executors.proc import PostgreSQLExecutor
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from jarvis.store.db import create_engine
+from jarvis.store.migrate import ALEMBIC_INI as _ALEMBIC_PATH
+from jarvis.store.migrate import migrate as migrate
 from jarvis.store.repo import Store
 
-ALEMBIC_INI = __file__.rsplit("/tests/", 1)[0] + "/alembic.ini"
+ALEMBIC_INI = str(_ALEMBIC_PATH)
 
 
 def _pg_ctl() -> str:
@@ -45,12 +45,6 @@ if _external:
 else:
     postgresql_server = factories.postgresql_proc(executable=_pg_ctl(), port=None)
 _counter = itertools.count()
-
-
-def migrate(url: str, revision: str = "head") -> None:
-    config = Config(ALEMBIC_INI)
-    config.attributes["database_url"] = url
-    command.upgrade(config, revision)
 
 
 @pytest.fixture

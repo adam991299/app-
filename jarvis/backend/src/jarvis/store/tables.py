@@ -109,6 +109,7 @@ class OrderRow(Base):
     strategy: Mapped[str | None] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(16))  # entry, exit, stop, take_profit
     symbol: Mapped[str] = mapped_column(String(32), index=True)
+    currency: Mapped[str | None] = mapped_column(String(3))
     side: Mapped[str] = mapped_column(String(4))
     quantity: Mapped[int] = mapped_column(Integer)
     limit_price: Mapped[Decimal | None] = mapped_column(MONEY)
@@ -139,3 +140,15 @@ class FillRow(Base):
     price: Mapped[Decimal] = mapped_column(MONEY)
     commission: Mapped[Decimal] = mapped_column(MONEY)
     at: Mapped[datetime] = mapped_column(UTC_TIME, index=True)
+
+
+class AccountState(Base):
+    """The latest picture of the account, written by execution after every
+    reconciliation and read by the app. Exactly one row (id = 1)."""
+
+    __tablename__ = "account_state"
+    __table_args__ = (CheckConstraint("id = 1", name="single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    at: Mapped[datetime] = mapped_column(UTC_TIME)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
