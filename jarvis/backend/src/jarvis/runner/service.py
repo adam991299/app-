@@ -115,6 +115,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             symbols=symbols,
             clock=clock,
             before_tick=monitor.refresh,
+            risk=settings.risk,
         )
         stop = asyncio.Event()
         task = asyncio.create_task(runner.run(stop))

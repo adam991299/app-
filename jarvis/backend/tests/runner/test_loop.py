@@ -246,3 +246,102 @@ async def test_run_loops_until_stopped_and_survives_errors(store: Store) -> None
     await runner.run(stop)
     assert calls == 2
     assert pauses.count(60.0) == 2
+
+
+TUESDAY_OPEN = datetime(2026, 11, 17, 14, 35, tzinfo=UTC)  # 5 min after the open
+TUESDAY_LATER = datetime(2026, 11, 17, 14, 45, tzinfo=UTC)  # after the 10-min window
+
+
+async def approve(store: Store, edge_r: float = 0.5) -> None:
+    from jarvis.strategy.trend import params_dict
+
+    await store.save_validation(
+        "trend",
+        params=params_dict(PARAMS),
+        passed=True,
+        edge_r=edge_r,
+        report_sv="Godkänd.",
+        at=DURING,
+    )
+
+
+async def test_approved_setup_is_entered_once_at_the_next_session(store: Store) -> None:
+    runner, sim, market, clock, _ = await make(store, DURING)
+    await runner.start()
+    await approve(store)
+    market.history = bars_rising(date(2026, 11, 16))
+    sim.set_price("AAPL", D(105))
+    market.prices["AAPL"] = D(105)
+    clock.now = AFTER
+    await runner.tick()
+    assert len(runner.pending) == 1
+    clock.now = TUESDAY_OPEN
+    await runner.tick()
+    assert len(runner.pending) == 1  # still inside the opening minutes
+    clock.now = TUESDAY_LATER
+    await runner.tick()
+    assert runner.pending == []
+    entry = await store.known_order("trend:AAPL:2026-11-16")
+    assert entry.quantity > 0
+    assert entry.limit_price == D("105.21")
+    decision = await store.risk_decisions("trend:AAPL:2026-11-16")
+    assert decision == [(True, [])]
+
+
+async def test_unapproved_or_failed_validation_never_buys(store: Store) -> None:
+    runner, _sim, market, clock, _ = await make(store, DURING)
+    await runner.start()
+    await store.save_validation(
+        "trend", params=None, passed=False, edge_r=0.0, report_sv="Underkänd.", at=DURING
+    )
+    market.history = bars_rising(date(2026, 11, 16))
+    clock.now = AFTER
+    await runner.tick()
+    assert runner.pending == []
+    assert await store.order("trend:AAPL:2026-11-16") is None
+
+
+async def test_queued_setups_lapse_after_one_session(store: Store) -> None:
+    runner, _, market, _clock, _ = await make(store, DURING)
+    await runner.start()
+    await approve(store)
+    market.history = bars_rising(date(2026, 11, 16))
+    await runner.after_close(date(2026, 11, 16))
+    assert runner.pending
+    market.history = []
+    await runner.after_close(date(2026, 11, 17))
+    assert runner.pending == []
+
+
+async def test_entry_is_skipped_without_quote_size_or_room(store: Store) -> None:
+    runner, sim, market, _clock, _ = await make(store, TUESDAY_LATER)
+    await runner.start()
+    await approve(store)
+    market.history = bars_rising(date(2026, 11, 16))
+    await runner.after_close(date(2026, 11, 16))
+    item = runner.pending[0]
+    market.prices.pop("AAPL")
+    await runner._enter(item)  # no quote
+    market.prices["AAPL"] = D(50)
+    await runner._enter(item)  # price already below the stop
+    sim._cash = D(0)
+    market.prices["AAPL"] = D(105)
+    await runner._enter(item)  # nothing to buy with
+    assert await store.order("trend:AAPL:2026-11-16") is None
+
+
+async def test_a_failed_entry_does_not_stop_the_others(store: Store) -> None:
+    runner, sim, market, _clock, _ = await make(store, TUESDAY_LATER)
+    await runner.start()
+    await approve(store)
+    market.history = bars_rising(date(2026, 11, 16))
+    await runner.after_close(date(2026, 11, 16))
+    sim.fail_next_call(BrokerError("refused"))
+    await runner.enter_pending()
+    assert runner.pending == []
+
+
+async def test_entry_window_outside_sessions(store: Store) -> None:
+    runner, *_ = await make(store, DURING)
+    assert not runner._entry_window_open(datetime(2026, 11, 14, 15, tzinfo=UTC))  # Saturday
+    assert not runner._entry_window_open(datetime(2031, 6, 2, 15, tzinfo=UTC))  # no calendar

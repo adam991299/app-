@@ -1,8 +1,10 @@
 """Runs Jarvis around the clock: connect, recover, reconcile every minute, and after the
 US close update trailing stops and look for new setups.
 
-New entries are not sent yet: the risk engine needs a validated expected edge per trade,
-which comes from the backtest (decision D18). Setups are logged openly instead.
+New entries are only sent when the strategy's latest validation passed (decision D18): the
+expected edge per trade comes from that validation, measured in R. A setup found after the
+close is entered once, at the next session after its opening minutes; otherwise it lapses.
+Without a passed validation, setups are only logged.
 """
 
 from __future__ import annotations
@@ -10,20 +12,43 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, MutableMapping
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Protocol
 
 from jarvis.broker import BrokerAdapter, BrokerError, BrokerUnavailableError
 from jarvis.broker.models import OrderStatus
+from jarvis.config.settings import Risk
 from jarvis.domain import Instrument, Quote
-from jarvis.execution.engine import ExecutionEngine, Outcome
+from jarvis.domain.ticks import round_down
+from jarvis.execution.engine import EntrySignal, ExecutionEngine, Outcome
 from jarvis.markets.calendar import CalendarRangeError, Exchange, session_at
+from jarvis.research.costs import CostModel
+from jarvis.risk.sizing import size_position
 from jarvis.store.repo import Store
 from jarvis.strategy.bars import Bar
-from jarvis.strategy.trend import TrendParameters, entry_setup, trailing_stop
+from jarvis.strategy.trend import (
+    NAME,
+    EntrySetup,
+    TrendParameters,
+    entry_setup,
+    params_from,
+    signal_id,
+    trailing_stop,
+)
 
 logger = logging.getLogger(__name__)
 HISTORY_YEARS = 1
+MARKETABLE = Decimal("1.002")  # entry limit: last price + 0.2 %, then rounded down
+
+
+@dataclass(frozen=True, slots=True)
+class Pending:
+    instrument: Instrument
+    setup: EntrySetup
+    params: TrendParameters
+    edge_r: float
 
 
 class MarketSource(Protocol):
@@ -53,6 +78,8 @@ class Runner:
         reconcile_seconds: float = 60.0,
         after_close_delay: timedelta = timedelta(minutes=15),
         before_tick: Callable[[], Awaitable[None]] | None = None,
+        risk: Risk | None = None,
+        costs: CostModel | None = None,
     ) -> None:
         self._broker = broker
         self._engine = engine
@@ -67,6 +94,9 @@ class Runner:
         self._every = reconcile_seconds
         self._delay = after_close_delay
         self._before_tick = before_tick
+        self._risk = risk or Risk()
+        self._costs = costs or CostModel()
+        self.pending: list[Pending] = []
         self.last_close_processed: date | None = None
 
     async def connect(self) -> bool:
@@ -116,29 +146,48 @@ class Runner:
         if not self._broker.is_connected():
             await self.connect()
         await self._engine.reconcile()
-        day = self._close_due(self._clock())
+        now = self._clock()
+        if self.pending and self._entry_window_open(now):
+            await self.enter_pending()
+        day = self._close_due(now)
         if day is not None:
             await self.after_close(day)
 
+    def _entry_window_open(self, now: datetime) -> bool:
+        try:
+            session = session_at(self._exchange, now)
+        except CalendarRangeError:
+            return False
+        if session.opens_at is None or not session.is_open(now):
+            return False
+        return now >= session.opens_at + timedelta(
+            minutes=self._risk.order_safety.avoid_open_minutes
+        )
+
     async def after_close(self, day: date) -> None:
+        self.pending = []  # yesterday's setups lapse: a setup gets exactly one session
         await self.load_instruments()  # retry symbols that could not be loaded before
         bars: dict[str, list[Bar]] = {}
         for symbol, instrument in self._instruments.items():
             bars[symbol] = await self._market.daily_bars(
                 instrument, years=HISTORY_YEARS, closed_through=day
             )
-        await self._update_stops(bars)
-        await self._log_setups(bars, day)
+        approval = await self._store.latest_validation(NAME)
+        params, edge_r = self._params, 0.0
+        if approval is not None and approval[0] and approval[2] is not None:
+            params, edge_r = params_from(approval[2]), approval[1]
+        await self._update_stops(bars, params)
+        await self._queue_setups(bars, day, params, edge_r)
         self.last_close_processed = day
 
-    async def _update_stops(self, bars: dict[str, list[Bar]]) -> None:
+    async def _update_stops(self, bars: dict[str, list[Bar]], params: TrendParameters) -> None:
         for order in await self._store.open_orders():
             if order.kind != "stop" or order.parent_id is None:
                 continue
             if order.status not in (OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED):
                 continue
             history = bars.get(order.symbol, [])
-            level = trailing_stop(history, self._params) if history else None
+            level = trailing_stop(history, params) if history else None
             if level is None:
                 continue
             try:
@@ -149,10 +198,15 @@ class Runner:
             if result.outcome is Outcome.STOP_RAISED:
                 logger.info("raised %s to %s", order.client_order_id, level)
 
-    async def _log_setups(self, bars: dict[str, list[Bar]], day: date) -> None:
+    async def _queue_setups(
+        self, bars: dict[str, list[Bar]], day: date, params: TrendParameters, edge_r: float
+    ) -> None:
         for symbol, history in bars.items():
-            setup = entry_setup(history, self._params) if history else None
+            setup = entry_setup(history, params) if history else None
             if setup is None:
+                continue
+            if edge_r > 0:
+                self.pending.append(Pending(self._instruments[symbol], setup, params, edge_r))
                 continue
             await self._store.audit(
                 actor="jarvis",
@@ -163,9 +217,65 @@ class Runner:
                     "day": day.isoformat(),
                     "reference_price": str(setup.reference_price),
                     "stop_price": str(setup.stop_price),
-                    "reason": "no validated expected edge yet (decision D18)",
+                    "reason": "no passed validation with a positive edge (decision D18)",
                 },
             )
+
+    async def enter_pending(self) -> None:
+        """Send each queued setup once; whatever happens, it is not retried."""
+        queued, self.pending = self.pending, []
+        for item in queued:
+            try:
+                await self._enter(item)
+            except BrokerError:
+                logger.exception("entry for %s failed", item.instrument.symbol)
+
+    async def _enter(self, item: Pending) -> None:
+        instrument, setup = item.instrument, item.setup
+        quote = await self._market.quote(instrument)
+        if quote is None:
+            return
+        limit = round_down(quote.last * MARKETABLE)
+        stop = setup.stop_price
+        if limit <= stop:
+            return  # the price already fell through the planned stop
+        account = await self._broker.account()
+        reserve = (
+            account.net_liquidation * Decimal(str(self._risk.portfolio.min_cash_reserve_pct)) / 100
+        )
+        sized = size_position(
+            instrument=instrument,
+            equity=account.net_liquidation,
+            free_cash=account.cash - reserve,
+            entry=limit,
+            stop=stop,
+            fx_to_base=quote.fx_to_base,
+            risk=self._risk,
+        )
+        if sized.quantity == 0:
+            return
+        risk_amount = sized.quantity * (limit - stop) * quote.fx_to_base
+        round_trip = 2 * self._costs.total(sized.quantity, float(limit), 1e9)
+        edge_text = f"{item.edge_r:.2f}".replace(".", ",")  # Swedish decimal comma
+        result = await self._engine.submit_entry(
+            EntrySignal(
+                signal_id=signal_id(instrument.symbol, setup),
+                strategy=NAME,
+                instrument=instrument,
+                quantity=sized.quantity,
+                limit_price=limit,
+                stop_price=stop,
+                expected_edge=Decimal(str(item.edge_r)) * risk_amount,
+                estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
+                explanation_sv=(
+                    f"Kursen stängde över sin högsta nivå på {item.params.entry_lookback} dagar "
+                    f"({setup.channel_high}). Stopp {stop}. Valideringen visar i snitt "
+                    f"{edge_text} gånger risken per affär."
+                ),
+                features={"channel_high": str(setup.channel_high), "atr": str(setup.atr)},
+            )
+        )
+        logger.info("entry %s: %s %s", result.client_order_id, result.outcome, result.reasons)
 
     async def run(self, stop: asyncio.Event) -> None:
         """Never ends on an error: a failed start is retried, a failed tick is logged and the

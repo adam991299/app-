@@ -92,6 +92,7 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
       köpsignaler loggas men skickas inte förrän en validerad förväntad vinst finns (D18)
 - [x] Larm via e-post (Adams eget Gmail, valfritt) och alltid i loggen; Web Push kommer med appen i Fas 6
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
+- [x] Köp skickas bara när senaste validering är godkänd; storlek enligt risk-motorn, förväntad vinst från valideringen (D18)
 - [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)
 
 **Skjuts uttryckligen upp** (risk-delar som kräver data eller vyer som inte finns än).
@@ -118,7 +119,14 @@ Kalendrar, universum, historik- och realtidsdata från IBKR Paper, datakvalitets
 **Acceptanskrav:** Historik för minst 200 instrument över alla tillgångsslag sparad och
 kvalitetskontrollerad.
 
-### ⬜ Fas 2 – Research-labb
+### 🔨 Fas 2 – Research-labb
+
+- [x] Kostnadsmodell, händelsedriven och vektoriserad backtest (lika på 12 serier), lookahead-test
+      som fångar inplanterat fel, Sharpe, deflaterad Sharpe, Monte Carlo, walk-forward, låst holdout,
+      register över alla försök
+- [x] Kommandot `python -m jarvis.research.run` validerar trendstrategin på 10 års IBKR-data och sparar utfallet
+- [ ] Köra valideringen på servern (kräver servern och papperskontot)
+
 Kostnadsmodell, vektoriserad och händelsedriven backtester, walk-forward, holdout, Deflated
 Sharpe, Monte Carlo och lookahead-test.
 **Acceptanskrav:** En känd enkel strategi ger samma resultat i båda backtestrarna (inom

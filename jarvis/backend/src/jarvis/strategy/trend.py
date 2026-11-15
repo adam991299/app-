@@ -102,6 +102,25 @@ def trailing_stop(bars: list[Bar], params: TrendParameters) -> Decimal | None:
     return min(bar.low for bar in bars[-params.exit_lookback :])
 
 
+def params_dict(params: TrendParameters) -> dict[str, object]:
+    """For storage: every value as text, so Decimals survive JSON exactly."""
+    return {
+        "entry_lookback": str(params.entry_lookback),
+        "exit_lookback": str(params.exit_lookback),
+        "atr_period": str(params.atr_period),
+        "atr_stop_multiple": str(params.atr_stop_multiple),
+    }
+
+
+def params_from(data: dict[str, object]) -> TrendParameters:
+    return TrendParameters(
+        entry_lookback=int(str(data["entry_lookback"])),
+        exit_lookback=int(str(data["exit_lookback"])),
+        atr_period=int(str(data["atr_period"])),
+        atr_stop_multiple=Decimal(str(data["atr_stop_multiple"])),
+    )
+
+
 def signal_id(symbol: str, setup: EntrySetup) -> str:
     """Deterministic: replaying the same bar gives the same id, so never a second order."""
     return f"{NAME}:{symbol}:{setup.day}"
