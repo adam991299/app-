@@ -307,8 +307,9 @@ class SimBroker:
             average_fill_price=order.cost / filled,
             status=OrderStatus.FILLED if done else OrderStatus.PARTIALLY_FILLED,
         )
+        fill_id = f"sim-{len(self._fills) + 1}"
         self._fills.append(
-            Fill(cid, symbol, order.view.side, quantity, price, commission, self._clock())
+            Fill(fill_id, cid, symbol, order.view.side, quantity, price, commission, self._clock())
         )
 
         if order.kind == "entry":

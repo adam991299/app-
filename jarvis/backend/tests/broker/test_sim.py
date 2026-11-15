@@ -424,7 +424,9 @@ def test_partial_exit_keeps_average_cost_and_positions_list() -> None:
 def test_fills_since_filters_by_time() -> None:
     sim = broker()
     run(sim.submit(bracket()))
-    assert len(run(sim.fills(NOW))) == 1
+    sim.set_price("AAPL", D(90))
+    fills = run(sim.fills(NOW))
+    assert [f.fill_id for f in fills] == ["sim-1", "sim-2"]
     assert run(sim.fills(NOW + timedelta(seconds=1))) == ()
 
 

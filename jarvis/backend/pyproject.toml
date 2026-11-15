@@ -23,6 +23,7 @@ dev = [
     "pip-audit>=2.7",
     "psycopg[binary]>=3.3",
     "pytest>=8.3",
+    "pytest-asyncio>=1.2",
     "pytest-cov>=6.0",
     "pytest-postgresql>=10",
     "ruff>=0.8",
@@ -60,6 +61,8 @@ testpaths = ["tests"]
 addopts = "--cov=jarvis --cov-branch --cov-report=term-missing --cov-fail-under=85"
 # Deprecations raised inside pandas when exchange_calendars calls it; not our code.
 filterwarnings = ["error", "ignore::pandas.errors.Pandas4Warning"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]

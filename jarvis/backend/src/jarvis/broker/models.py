@@ -91,6 +91,10 @@ class BrokerOrder:
 
 @dataclass(frozen=True, slots=True)
 class Fill:
+    """One execution. ``fill_id`` is the broker's own id (IBKR execId), unique per fill, so
+    the same fill can never be booked twice after a restart."""
+
+    fill_id: str
     client_order_id: str
     symbol: str
     side: Side

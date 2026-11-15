@@ -4,6 +4,20 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D12. Dag och vecka för förlustgränserna följer svensk tid
+Kontot är ett ISK i kronor, så "dagens förlust" räknas från midnatt till midnatt i
+Europe/Stockholm, och veckan börjar måndag 00:00 svensk tid. Referensvärdet är kontots sista
+värde före dagens (veckans) början, alltså gårdagens (förra veckans) slutvärde. Värdena
+räknas fram ur sparade ögonblicksbilder av kontot, så att de är spårbara i efterhand.
+
+### D13. Databas och tester
+SQLAlchemy 2 (asynkront, asyncpg) med Alembic-migreringar. Databasens adress är en hemlighet
+och läses bara från miljövariabeln `JARVIS_DATABASE_URL`. Testerna körs mot en riktig
+PostgreSQL och hoppas aldrig över om den saknas. CI startar en egen server; där testerna
+körs som root (som i Claudes byggmiljö) startas servern som användaren `postgres` och pekas
+ut med `JARVIS_TEST_POSTGRES=host:port`. Ett test kontrollerar att migreringarna stämmer
+exakt med tabellerna i koden.
+
 ### D11. Beslut efter granskningen av risk-motorn
 - **Dags- och veckostoppet håller resten av dagen respektive veckan.** De jämför dagens och
   veckans *lägsta* kontovärde med startvärdet, inte det nuvarande. Första versionen släppte

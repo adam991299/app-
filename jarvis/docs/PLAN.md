@@ -67,7 +67,9 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
 - [x] CI kräver 100 % täckning i `risk/` och `broker/`
 - [x] Granskning av risk och broker, fynd åtgärdade (D11)
 - [x] Börskalender (`exchange_calendars`): öppettider, helgdagar, halvdagar, sommartid
-- [ ] Databasschema och lagring av kill switch, paus, equity-toppar och affärsjournal
+- [x] API-kontrakt för appen (`contracts/api.schema.json`, test mot avdrift)
+- [x] Databasschema och lagring: kill switch, paus, kontovärden, orderjournal, fyllnader,
+      riskbeslut, revisionslogg (D12, D13)
 - [ ] `execution/`: order-tillståndsmaskin, idempotens vid omstart, avstämning varje minut
 - [ ] Trendföljningsstrategi på dagsbarer (amerikanska aktier)
 - [ ] Hemskärm enligt §9.1 med status, innehav och affärer
