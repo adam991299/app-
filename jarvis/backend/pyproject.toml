@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "Jarvis the Trader — backend services"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.20",
+    "asyncpg>=0.32",
     "exchange-calendars>=4.6",
     "fastapi>=0.115",
     "pydantic>=2.9",
     "pyyaml>=6.0",
+    "sqlalchemy[asyncio]>=2.1",
     "uvicorn>=0.32",
 ]
 
@@ -18,8 +21,10 @@ dev = [
     "mypy>=1.13",
     "pandas-stubs>=3.1.0.261029",
     "pip-audit>=2.7",
+    "psycopg[binary]>=3.3",
     "pytest>=8.3",
     "pytest-cov>=6.0",
+    "pytest-postgresql>=10",
     "ruff>=0.8",
     "types-pyyaml>=6.0",
 ]

@@ -1,0 +1,450 @@
+{
+  "endpoints": {
+    "GET /api/portfolio": {
+      "$defs": {
+        "PositionOut": {
+          "additionalProperties": false,
+          "properties": {
+            "average_price": {
+              "title": "Average Price",
+              "type": "string"
+            },
+            "currency": {
+              "title": "Currency",
+              "type": "string"
+            },
+            "last_price": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Price"
+            },
+            "market_value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Market Value"
+            },
+            "quantity": {
+              "title": "Quantity",
+              "type": "integer"
+            },
+            "stop_price": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stop Price"
+            },
+            "strategy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            },
+            "symbol": {
+              "title": "Symbol",
+              "type": "string"
+            },
+            "unrealized_pnl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unrealized Pnl"
+            },
+            "unrealized_pnl_pct": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unrealized Pnl Pct"
+            }
+          },
+          "required": [
+            "symbol",
+            "quantity",
+            "currency",
+            "average_price",
+            "last_price",
+            "market_value",
+            "unrealized_pnl",
+            "unrealized_pnl_pct",
+            "stop_price",
+            "strategy"
+          ],
+          "title": "PositionOut",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "GET /api/portfolio — the big number and the holdings.",
+      "properties": {
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "base_currency": {
+          "title": "Base Currency",
+          "type": "string"
+        },
+        "cash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cash"
+        },
+        "day_change": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Day Change"
+        },
+        "day_change_pct": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Day Change Pct"
+        },
+        "net_liquidation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Net Liquidation"
+        },
+        "positions": {
+          "items": {
+            "$ref": "#/$defs/PositionOut"
+          },
+          "title": "Positions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "base_currency",
+        "net_liquidation",
+        "cash",
+        "day_change",
+        "day_change_pct",
+        "positions",
+        "as_of"
+      ],
+      "title": "PortfolioOut",
+      "type": "object"
+    },
+    "GET /api/status": {
+      "$defs": {
+        "MarketOut": {
+          "additionalProperties": false,
+          "properties": {
+            "closes_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Closes At"
+            },
+            "exchange": {
+              "title": "Exchange",
+              "type": "string"
+            },
+            "is_open": {
+              "title": "Is Open",
+              "type": "boolean"
+            },
+            "name_sv": {
+              "title": "Name Sv",
+              "type": "string"
+            },
+            "opens_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Opens At"
+            }
+          },
+          "required": [
+            "exchange",
+            "name_sv",
+            "is_open",
+            "opens_at",
+            "closes_at"
+          ],
+          "title": "MarketOut",
+          "type": "object"
+        },
+        "ReasonOut": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "title": "Code",
+              "type": "string"
+            },
+            "message_sv": {
+              "title": "Message Sv",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message_sv"
+          ],
+          "title": "ReasonOut",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "GET /api/status — what the orb and the briefing show.",
+      "properties": {
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "briefing_sv": {
+          "title": "Briefing Sv",
+          "type": "string"
+        },
+        "broker_connected": {
+          "title": "Broker Connected",
+          "type": "boolean"
+        },
+        "markets": {
+          "items": {
+            "$ref": "#/$defs/MarketOut"
+          },
+          "title": "Markets",
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "paper",
+            "live"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/ReasonOut"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "trading_state": {
+          "enum": [
+            "active",
+            "no_new_trades",
+            "closing_only",
+            "paused",
+            "kill_switch",
+            "halted"
+          ],
+          "title": "Trading State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "trading_state",
+        "reasons",
+        "broker_connected",
+        "markets",
+        "briefing_sv",
+        "as_of"
+      ],
+      "title": "StatusOut",
+      "type": "object"
+    },
+    "GET /api/today": {
+      "additionalProperties": false,
+      "description": "GET /api/today — the \"Idag\" row.",
+      "properties": {
+        "realized_pnl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Realized Pnl"
+        },
+        "risk_level_sv": {
+          "title": "Risk Level Sv",
+          "type": "string"
+        },
+        "trades_count": {
+          "title": "Trades Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "trades_count",
+        "realized_pnl",
+        "risk_level_sv"
+      ],
+      "title": "TodayOut",
+      "type": "object"
+    },
+    "GET /api/trades": {
+      "$defs": {
+        "TradeOut": {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "format": "date-time",
+              "title": "At",
+              "type": "string"
+            },
+            "commission": {
+              "title": "Commission",
+              "type": "string"
+            },
+            "currency": {
+              "title": "Currency",
+              "type": "string"
+            },
+            "explanation_sv": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Explanation Sv"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "price": {
+              "title": "Price",
+              "type": "string"
+            },
+            "quantity": {
+              "title": "Quantity",
+              "type": "integer"
+            },
+            "side": {
+              "enum": [
+                "buy",
+                "sell"
+              ],
+              "title": "Side",
+              "type": "string"
+            },
+            "strategy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            },
+            "symbol": {
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "symbol",
+            "side",
+            "quantity",
+            "price",
+            "commission",
+            "currency",
+            "at",
+            "strategy",
+            "explanation_sv"
+          ],
+          "title": "TradeOut",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "GET /api/trades?limit=N — newest first.",
+      "properties": {
+        "trades": {
+          "items": {
+            "$ref": "#/$defs/TradeOut"
+          },
+          "title": "Trades",
+          "type": "array"
+        }
+      },
+      "required": [
+        "trades"
+      ],
+      "title": "TradesOut",
+      "type": "object"
+    }
+  },
+  "title": "Jarvis API"
+}
