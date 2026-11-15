@@ -72,7 +72,7 @@ Logga ut och in igen efter det sista kommandot.
 2. Hämta koden (repot är privat, så GitHub frågar efter inloggning):
 
 ```bash
-git clone https://github.com/adam991299/app-.git
+git clone -b claude/new-session-jn5c19 https://github.com/adam991299/app-.git
 ```
 
 ```bash
