@@ -26,6 +26,8 @@ Fas 0 ──► Fas 0.5 (tunn version, pappershandlar ≥ 10 handelsdagar) ─�
   └──────────────────────────────► Fas 8 Papper ≥ 60 handelsdagar ► Fas 9 Live ► Fas 10
 ```
 
+- [x] Ekonomimodulen (`economics/`): break-even, ISK-skatt från config (aldrig gissad), Monte Carlo "Kan jag leva på det?" med ojämn avkastning, buffert och uttagsregel; 100 % täckning. Vyn i appen kommer i Fas 6.
+
 **Byggs parallellt** (egna git worktrees, efter att de delade gränssnitten finns):
 nyhetsmotorn (4), politikersignaler (4.2), appens design och vyer (6), research-labbet (2),
 ekonomimodulen. **Byggs aldrig i hast:** `risk/`, `execution/`, `broker/`, `economics/`.
