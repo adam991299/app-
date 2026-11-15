@@ -9,7 +9,13 @@ from typing import Any
 
 import pytest
 
-from jarvis.broker import BrokerError, BrokerOrder, OrderRequest, OrderStatus
+from jarvis.broker import (
+    BrokerError,
+    BrokerOrder,
+    BrokerUnavailableError,
+    OrderRequest,
+    OrderStatus,
+)
 from jarvis.broker.sim import SimBroker
 from jarvis.config.settings import Risk
 from jarvis.domain import Instrument, Quote, Side
@@ -29,8 +35,11 @@ MSFT = instrument("MSFT")
 @dataclass
 class Recorder:
     sent: list[tuple[AlertLevel, str]] = field(default_factory=list)
+    failing: bool = False
 
     async def send(self, level: AlertLevel, message_sv: str) -> None:
+        if self.failing:
+            raise RuntimeError("push service down")
         self.sent.append((level, message_sv))
 
 
@@ -53,7 +62,7 @@ class FlakySim(SimBroker):
     async def submit(self, request: OrderRequest) -> BrokerOrder:
         if self.fail_submit:
             self.fail_submit = False
-            raise BrokerError("connection reset")
+            raise BrokerUnavailableError("connection reset")
         if self.drain_cash_on_submit:
             self._cash = D(10)
         return await super().submit(request)
@@ -261,7 +270,7 @@ async def test_crash_after_broker_accepted_is_recovered_from_the_broker(world: W
 
 async def test_broker_outage_stops_trading_after_repeated_errors(world: World) -> None:
     for _ in range(5):
-        world.sim.fail_next_call(BrokerError("timeout"))
+        world.sim.fail_next_call(BrokerUnavailableError("timeout"))
         result = await world.engine.submit_entry(signal())
         assert result.outcome is Outcome.BROKER_UNAVAILABLE
     assert world.engine.health().consecutive_broker_errors == 5
@@ -287,9 +296,9 @@ async def test_gateway_disconnect_halts_and_stops_still_protect(world: World) ->
 async def test_recover_and_reconcile_report_broker_errors(world: World) -> None:
     world.sim.fail_submit = True
     await world.engine.submit_entry(signal())
-    world.sim.fail_next_call(BrokerError("down"))
+    world.sim.fail_next_call(BrokerUnavailableError("down"))
     assert not await world.engine.recover()
-    world.sim.fail_next_call(BrokerError("down"))
+    world.sim.fail_next_call(BrokerUnavailableError("down"))
     assert not await world.engine.reconcile()
 
 
@@ -317,7 +326,7 @@ async def test_raise_stop_needs_a_quote_and_a_broker(world: World) -> None:
     world.prices.pop("AAPL")
     assert (await world.engine.raise_stop(cid, D(97))).outcome is Outcome.STOP_UNCHANGED
     world.price("AAPL", "100")
-    world.sim.fail_next_call(BrokerError("down"))
+    world.sim.fail_next_call(BrokerUnavailableError("down"))
     assert (await world.engine.raise_stop(cid, D(97))).outcome is Outcome.BROKER_UNAVAILABLE
     assert (await world.engine.raise_stop("nothing", D(97))).outcome is Outcome.STOP_UNCHANGED
 
@@ -450,3 +459,158 @@ async def test_recover_keeps_orders_that_reached_the_broker(world: World) -> Non
     assert await status_of(world.store, unsent.client_order_id) is OrderStatus.NEW
     assert await world.engine.recover()
     assert await world.store.booked_positions() == {"AAPL": 50}
+
+
+# -- regression tests for defects found in review ------------------------------------------------
+
+
+async def test_stop_of_a_resting_entry_does_not_count_as_protection(world: World) -> None:
+    a = await world.engine.submit_entry(signal("a", quantity=20))
+    await world.engine.submit_entry(signal("b", quantity=20, limit_price=D(99), stop_price=D(94)))
+    await world.sim.cancel(f"{a.client_order_id}.stop")
+    assert not await world.engine.reconcile()
+    assert any("saknar fullt skydd" in m for _, m in world.alerts.sent)
+
+
+async def test_partial_fill_is_protected_and_reconciles(store: Store, world: World) -> None:
+    world.sim._max_fill = 15
+    result = await world.engine.submit_entry(signal(quantity=40))
+    assert await status_of(store, result.client_order_id) is OrderStatus.PARTIALLY_FILLED
+    assert await world.engine.reconcile()  # 15 bought, 15 covered by the active stop
+    world.sim.expire_day_orders()
+    assert await world.engine.reconcile()
+    assert await status_of(store, result.client_order_id) is OrderStatus.EXPIRED
+    stop = await store.known_order(f"{result.client_order_id}.stop")
+    assert (stop.quantity, stop.status) == (15, OrderStatus.SUBMITTED)
+
+
+async def test_stop_is_compared_with_the_broker_not_the_journal(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    await world.sim.modify_stop(f"{cid}.stop", D(98))  # journal still says 95 (crash window)
+    lowered = await world.engine.raise_stop(cid, D(96))
+    assert lowered.outcome is Outcome.STOP_UNCHANGED
+    assert await world.engine.reconcile()
+    assert (await world.store.known_order(f"{cid}.stop")).stop_price == D(98)  # adopted
+
+
+async def test_failed_alert_is_retried_and_reconcile_completes(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    await world.sim.cancel(f"{cid}.stop")
+    world.alerts.failing = True
+    assert not await world.engine.reconcile()
+    assert world.alerts.sent == []
+    world.alerts.failing = False
+    assert not await world.engine.reconcile()
+    assert len([m for _, m in world.alerts.sent if "saknar fullt skydd" in m]) == 1
+
+
+async def test_id_collision_keeps_trading_halted(world: World) -> None:
+    await world.sim.submit(OrderRequest("trend:AAPL:x", AAPL, Side.BUY, 1, D(100), D(90)))
+    await world.engine.submit_entry(signal("trend:AAPL:x"))
+    assert not await world.engine.reconcile()
+    assert not await world.engine.reconcile()
+    assert any("inte den jag skapade" in m for _, m in world.alerts.sent)
+    journal = await world.store.known_order("trend:AAPL:x")
+    assert journal.quantity == 50  # the foreign order was not adopted
+
+
+@pytest.mark.parametrize(
+    ("change", "text"),
+    [({"symbol": "MSFT"}, "symbol"), ({"side": "sell"}, "riktning"), ({"quantity": 7}, "antal")],
+)
+async def test_identity_mismatches_are_detected(
+    world: World, change: dict[str, Any], text: str
+) -> None:
+    base: dict[str, Any] = {"symbol": "AAPL", "side": "buy", "quantity": 10}
+    row = base | change
+    await world.store.add_order(
+        NewOrder("odd", "entry", row["symbol"], row["side"], row["quantity"], D(100), D(95)),
+        at=NOW,
+    )
+    await world.sim.submit(OrderRequest("odd", AAPL, Side.BUY, 10, D(100), D(95)))
+    assert not await world.engine.reconcile()
+    assert any(text in m for _, m in world.alerts.sent)
+
+
+async def test_broker_refusals_are_not_counted_as_outage(world: World) -> None:
+    world.sim.drain_cash_on_submit = True
+    rejected = await world.engine.submit_entry(signal())
+    cid = rejected.client_order_id
+    assert await status_of(world.store, f"{cid}.stop") is OrderStatus.CANCELLED
+    for _ in range(6):
+        assert (await world.engine.raise_stop(cid, D(97))).outcome is Outcome.STOP_UNCHANGED
+    world.sim.fail_next_call(BrokerError("refused"))
+    with pytest.raises(BrokerError):
+        await world.engine._call(world.sim.account())
+    assert world.engine.health().consecutive_broker_errors == 0
+
+
+async def test_replay_after_broker_accepted_reports_duplicate(world: World) -> None:
+    cid = "trend:AAPL:crash2"
+    await world.store.add_order(
+        NewOrder(cid, "entry", "AAPL", "buy", 50, D("100.2"), D(95), strategy="trend"), at=NOW
+    )
+    await world.store.add_order(
+        NewOrder(f"{cid}.stop", "stop", "AAPL", "sell", 50, None, D(95), parent_id=cid), at=NOW
+    )
+    await world.sim.submit(OrderRequest(cid, AAPL, Side.BUY, 50, D("100.2"), D(95)))
+    replay = await world.engine.submit_entry(signal(cid))
+    assert (replay.outcome, replay.detail) == (Outcome.DUPLICATE, "filled")
+    world.sim.fail_submit = True
+    await world.engine.submit_entry(signal("unsent2", quantity=10))
+    world.sim.fail_next_call(BrokerUnavailableError("down"))
+    assert (await world.engine.submit_entry(signal("unsent2", quantity=10))).outcome is (
+        Outcome.BROKER_UNAVAILABLE
+    )
+
+
+async def test_changing_mismatch_alerts_only_once(world: World) -> None:
+    await world.sim.submit(OrderRequest("manual-1", AAPL, Side.BUY, 5, D(100), D(90)))
+    assert not await world.engine.reconcile()
+    await world.sim.submit(OrderRequest("manual-2", AAPL, Side.BUY, 3, D(100), D(90)))
+    assert not await world.engine.reconcile()
+    assert len([m for _, m in world.alerts.sent if "stämmer inte" in m]) == 1
+
+
+async def test_unreasonable_account_value_halts_without_poisoning_marks(world: World) -> None:
+    world.sim._cash = D(0)
+    assert not await world.engine.reconcile()
+    assert any("orimligt kontovärde" in m for _, m in world.alerts.sent)
+    marks = await world.store.equity_marks(NOW)
+    assert marks is not None
+    assert marks.day_low == D(100000)
+    assert not (await world.store.controls()).kill_switch_engaged
+    result = await world.engine.submit_entry(signal())
+    assert result.outcome is Outcome.REJECTED_BY_RISK
+
+
+async def test_raise_stop_reports_outage_when_reading_the_stop(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.sim.fail_next_call(BrokerUnavailableError("down"))
+    assert (await world.engine.raise_stop(cid, D(97))).outcome is Outcome.BROKER_UNAVAILABLE
+
+
+async def test_outage_while_checking_stops_fails_reconcile(world: World) -> None:
+    await world.engine.submit_entry(signal())
+    calls = 0
+    original = world.sim.order
+
+    async def flaky(client_order_id: str) -> BrokerOrder | None:
+        nonlocal calls
+        calls += 1
+        if calls > 2:
+            raise BrokerUnavailableError("down")
+        return await original(client_order_id)
+
+    world.sim.order = flaky  # type: ignore[method-assign]
+    assert not await world.engine.reconcile()
+
+
+async def test_raise_stop_reports_outage_when_moving_the_stop(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+
+    async def down(client_order_id: str, stop_price: Decimal) -> BrokerOrder:
+        raise BrokerUnavailableError("down")
+
+    world.sim.modify_stop = down  # type: ignore[method-assign]
+    assert (await world.engine.raise_stop(cid, D(97))).outcome is Outcome.BROKER_UNAVAILABLE

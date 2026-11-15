@@ -93,6 +93,12 @@ class OrderRow(Base):
     __table_args__ = (
         CheckConstraint("side IN ('buy', 'sell')", name="known_side"),
         CheckConstraint("quantity > 0", name="positive_quantity"),
+        CheckConstraint("kind IN ('entry', 'exit', 'stop', 'take_profit')", name="known_kind"),
+        CheckConstraint(
+            "status IN ('new', 'submitted', 'partially_filled', 'filled', 'cancelled', "
+            "'rejected', 'expired')",
+            name="known_status",
+        ),
         CheckConstraint("filled_quantity >= 0 AND filled_quantity <= quantity", name="fill_range"),
     )
 

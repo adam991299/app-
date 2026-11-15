@@ -305,3 +305,12 @@ async def test_stop_price_updates_and_order_counts(store: Store) -> None:
     assert await store.count_orders_since(NOW + timedelta(minutes=1)) == 1
     with pytest.raises(KeyError):
         await store.set_stop_price("ghost", D(1), at=NOW)
+
+
+async def test_unknown_status_or_kind_cannot_be_stored(store: Store, engine: AsyncEngine) -> None:
+    with pytest.raises(IntegrityError):
+        await store.add_order(entry(kind="mystery"), at=NOW)
+    await store.add_order(entry(), at=NOW)
+    async with engine.begin() as conn:
+        with pytest.raises(IntegrityError):
+            await conn.execute(text("UPDATE orders SET status = 'vanished'"))

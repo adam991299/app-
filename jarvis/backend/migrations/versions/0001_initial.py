@@ -85,6 +85,12 @@ def upgrade() -> None:
         sa.Column("updated_at", UTC_TIME, nullable=False),
         sa.CheckConstraint("side IN ('buy', 'sell')", name="known_side"),
         sa.CheckConstraint("quantity > 0", name="positive_quantity"),
+        sa.CheckConstraint("kind IN ('entry', 'exit', 'stop', 'take_profit')", name="known_kind"),
+        sa.CheckConstraint(
+            "status IN ('new', 'submitted', 'partially_filled', 'filled', 'cancelled', "
+            "'rejected', 'expired')",
+            name="known_status",
+        ),
         sa.CheckConstraint(
             "filled_quantity >= 0 AND filled_quantity <= quantity", name="fill_range"
         ),

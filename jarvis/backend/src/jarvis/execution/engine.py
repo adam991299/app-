@@ -8,6 +8,8 @@ Guarantees:
 - **Always protected:** entries go out as brackets, so the stop lives at the broker from
   the first fill. Exits in this version happen only by raising that stop, never by
   removing it, so there is no moment without protection. A stop is never lowered.
+- **One instance:** nothing else may write orders for the account. Running two engines at
+  once is not supported (a database lock for this is planned with the deployment, Fas 7).
 - **The broker is the truth:** ``reconcile`` compares Jarvis's books with the broker every
   minute. Any mismatch, unknown order or position without a stop halts trading (risk
   state HALTED) and alerts Adam until it is resolved.
@@ -15,6 +17,7 @@ Guarantees:
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -27,12 +30,13 @@ from jarvis.broker import (
     BrokerAdapter,
     BrokerError,
     BrokerOrder,
+    BrokerUnavailableError,
     DuplicateOrderIdError,
     OrderRequest,
     OrderStatus,
 )
 from jarvis.config.settings import Risk
-from jarvis.domain import Instrument, Position, Quote, Side
+from jarvis.domain import Account, Instrument, Position, Quote, Side
 from jarvis.execution.alerts import AlertLevel, Alerts
 from jarvis.execution.states import InvalidTransitionError, check_transition
 from jarvis.risk.breakers import BreakerStatus, Controls, SystemHealth, TradingState, evaluate
@@ -45,11 +49,13 @@ from jarvis.risk.engine import (
 )
 from jarvis.risk.reasons import Reason
 from jarvis.store.periods import day_start
-from jarvis.store.repo import NewOrder, Store
+from jarvis.store.repo import NewOrder, Store, StoredOrder
 
 T = TypeVar("T")
 QuoteSource = Callable[[Instrument], Awaitable[Quote | None]]
 SessionSource = Callable[[Instrument, datetime], MarketSession]
+
+logger = logging.getLogger(__name__)
 
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,100}$")
 FILL_LOOKBACK = timedelta(days=7)
@@ -121,16 +127,22 @@ class ExecutionEngine:
         self._alerts = alerts
         self._broker_errors = 0
         self._reconciled = False
-        self._problems: set[str] = set()  # found since the current reconciliation began
-        self._alerted: set[str] = set()  # already sent to Adam and not yet resolved
+        self._problems: set[str] = set()  # keys found since the current reconciliation began
+        self._alerted: set[str] = set()  # keys already sent to Adam and not yet resolved
+        self._unsent: list[tuple[AlertLevel, str]] = []  # alerts whose delivery failed
 
     # -- broker calls and health ------------------------------------------------------
 
     async def _call(self, awaitable: Awaitable[T]) -> T:
+        """Counts consecutive connection failures. A broker *refusal* (e.g. an unknown
+        order) proves the connection works, so it resets the count like a success."""
         try:
             result = await awaitable
-        except BrokerError:
+        except BrokerUnavailableError:
             self._broker_errors += 1
+            raise
+        except BrokerError:
+            self._broker_errors = 0
             raise
         self._broker_errors = 0
         return result
@@ -156,21 +168,37 @@ class ExecutionEngine:
         )
         if status.kill_switch_should_engage:
             await self._store.engage_kill_switch("drawdown", actor="jarvis", at=now)
-            await self._alerts.send(
+            await self._send(
                 AlertLevel.CRITICAL,
                 "Kill switch är aktiverad: kontot har fallit för mycket från toppen. "
                 "Inga nya affärer tas förrän du startar handeln igen i appen.",
             )
         return status
 
-    async def _problem(self, message_sv: str) -> None:
-        """Halt and alert. Each distinct problem is alerted once until it is resolved, so a
-        problem that persists does not send a new alert every minute."""
+    async def _send(self, level: AlertLevel, message_sv: str) -> bool:
+        """Deliver an alert. A failed delivery never interrupts trading logic; the alert
+        is kept and retried at the next reconciliation."""
+        try:
+            await self._alerts.send(level, message_sv)
+        except Exception:
+            logger.exception("alert delivery failed; will retry")
+            self._unsent.append((level, message_sv))
+            return False
+        return True
+
+    async def _retry_unsent(self) -> None:
+        pending, self._unsent = self._unsent, []
+        for level, message in pending:
+            await self._send(level, message)
+
+    async def _problem(self, key: str, message_sv: str) -> None:
+        """Halt and alert. Each problem (by key) is alerted once until it is resolved, so a
+        problem that persists or changes its numbers does not alert every minute."""
         self._reconciled = False
-        self._problems.add(message_sv)
-        if message_sv not in self._alerted:
-            self._alerted.add(message_sv)
-            await self._alerts.send(AlertLevel.CRITICAL, message_sv)
+        self._problems.add(key)
+        if key not in self._alerted:
+            self._alerted.add(key)
+            await self._send(AlertLevel.CRITICAL, message_sv)
 
     # -- entries --------------------------------------------------------------------------
 
@@ -182,6 +210,15 @@ class ExecutionEngine:
         existing = await self._store.order(cid)
         if existing is not None and existing.status is not OrderStatus.NEW:
             return Result(Outcome.DUPLICATE, cid, detail=existing.status.value)
+        if existing is not None:
+            # Journaled but unconfirmed: Jarvis may have died after the broker accepted it.
+            try:
+                at_broker = await self._call(self._broker.order(cid))
+            except BrokerError as exc:
+                return Result(Outcome.BROKER_UNAVAILABLE, cid, detail=str(exc))
+            if at_broker is not None:
+                await self._apply(at_broker, now)
+                return Result(Outcome.DUPLICATE, cid, detail=at_broker.status.value)
 
         proposal = OrderProposal(
             instrument=signal.instrument,
@@ -197,7 +234,10 @@ class ExecutionEngine:
         except BrokerError as exc:
             return Result(Outcome.BROKER_UNAVAILABLE, cid, detail=str(exc))
         except UnknownInstrumentError as exc:
-            await self._problem(f"Mäklaren rapporterar ett innehav jag inte känner till: {exc}.")
+            await self._problem(
+                f"unknown-instrument:{exc}",
+                f"Mäklaren rapporterar ett innehav jag inte känner till: {exc}.",
+            )
             return Result(Outcome.REJECTED_BY_RISK, cid, (Reason.NOT_RECONCILED,))
 
         decision = self._checker.check(proposal, context)
@@ -227,7 +267,9 @@ class ExecutionEngine:
         try:
             view = await self._call(self._broker.submit(request))
         except DuplicateOrderIdError:
-            await self._problem(f"Mäklaren har redan en annan order med id {cid}.")
+            await self._problem(
+                f"id-collision:{cid}", f"Mäklaren har redan en annan order med id {cid}."
+            )
             return Result(Outcome.REJECTED_BY_BROKER, cid, detail="duplicate order id")
         except BrokerError as exc:
             return Result(Outcome.BROKER_UNAVAILABLE, cid, detail=str(exc))
@@ -238,6 +280,15 @@ class ExecutionEngine:
             if child is not None:
                 await self._apply(child, now)
         if view.status is OrderStatus.REJECTED:
+            for child_id in _child_ids(request):  # the broker never created them
+                await self._store.update_order(
+                    child_id,
+                    at=now,
+                    status=OrderStatus.CANCELLED,
+                    filled_quantity=0,
+                    average_fill_price=None,
+                    reject_reason="entry rejected by the broker",
+                )
             return Result(Outcome.REJECTED_BY_BROKER, cid, detail=view.reject_reason)
         return Result(Outcome.SUBMITTED, cid)
 
@@ -293,7 +344,13 @@ class ExecutionEngine:
         stored = await self._store.order(stop_id)
         if stored is None or stored.status.is_terminal:
             return Result(Outcome.STOP_UNCHANGED, stop_id, detail="no working stop")
-        if stored.stop_price is not None and new_stop <= stored.stop_price:
+        try:
+            current = await self._call(self._broker.order(stop_id))
+        except BrokerError as exc:
+            return Result(Outcome.BROKER_UNAVAILABLE, stop_id, detail=str(exc))
+        if current is None or current.stop_price is None or not current.status.is_working:
+            return Result(Outcome.STOP_UNCHANGED, stop_id, detail="no working stop")
+        if new_stop <= current.stop_price:  # the broker's level, not the journal's
             return Result(Outcome.STOP_UNCHANGED, stop_id, detail="a stop is never lowered")
         instrument = self._instruments.get(stored.symbol)
         quote = await self._quotes(instrument) if instrument is not None else None
@@ -304,7 +361,6 @@ class ExecutionEngine:
             view = await self._call(self._broker.modify_stop(stop_id, new_stop))
         except BrokerError as exc:
             return Result(Outcome.BROKER_UNAVAILABLE, stop_id, detail=str(exc))
-        await self._store.set_stop_price(stop_id, new_stop, at=now)
         await self._apply(view, now)
         return Result(Outcome.STOP_RAISED, stop_id)
 
@@ -312,6 +368,14 @@ class ExecutionEngine:
 
     async def _apply(self, view: BrokerOrder, now: datetime) -> None:
         stored = await self._store.known_order(view.client_order_id)
+        mismatch = _identity_mismatch(stored, view)
+        if mismatch is not None:
+            await self._problem(
+                f"identity:{view.client_order_id}",
+                f"Ordern {view.client_order_id} hos mäklaren är inte den jag skapade "
+                f"({mismatch}). Jag pausar nya affärer tills den är utredd.",
+            )
+            return
         try:
             check_transition(
                 stored.status,
@@ -321,9 +385,12 @@ class ExecutionEngine:
             )
         except InvalidTransitionError as exc:
             await self._problem(
-                f"Mäklarens besked om order {view.client_order_id} går inte ihop ({exc})."
+                f"transition:{view.client_order_id}",
+                f"Mäklarens besked om order {view.client_order_id} går inte ihop ({exc}).",
             )
             return
+        if view.stop_price is not None and view.stop_price != stored.stop_price:
+            await self._store.set_stop_price(view.client_order_id, view.stop_price, at=now)
         await self._store.update_order(
             view.client_order_id,
             at=now,
@@ -343,19 +410,22 @@ class ExecutionEngine:
                 await self._apply(view, now)
             elif stored.status is not OrderStatus.NEW:
                 await self._problem(
-                    f"Ordern {stored.client_order_id} finns inte längre hos mäklaren."
+                    f"missing:{stored.client_order_id}",
+                    f"Ordern {stored.client_order_id} finns inte längre hos mäklaren.",
                 )
         for fill in await self._call(self._broker.fills(now - FILL_LOOKBACK)):
             if await self._store.order(fill.client_order_id) is None:
                 await self._problem(
-                    f"Mäklaren rapporterar en affär i {fill.symbol} som jag inte gjort."
+                    f"foreign-fill:{fill.fill_id}",
+                    f"Mäklaren rapporterar en affär i {fill.symbol} som jag inte gjort.",
                 )
                 continue
             await self._store.record_fill(fill)
 
     async def recover(self) -> bool:
-        """After a start or crash: orders journaled but never sent are closed as not sent
-        (prices have moved; a fresh signal must pass risk again), then reconcile."""
+        """After a start or crash: orders journaled but never sent are closed as not sent,
+        then reconcile. Their signal ids are spent: the strategy's next bar produces a new
+        id, which must pass risk again at the prices of that moment."""
         now = self._clock()
         for stored in await self._store.open_orders():
             if stored.status is not OrderStatus.NEW:
@@ -383,46 +453,103 @@ class ExecutionEngine:
         they come back."""
         now = self._clock()
         self._problems = set()
+        await self._retry_unsent()
         try:
-            await self.sync()
-            account = await self._call(self._broker.account())
-            positions = await self._call(self._broker.positions())
-            orders = await self._call(self._broker.open_orders())
+            snapshot = await self._snapshot()
+            if snapshot.booked != snapshot.actual:
+                # A fill may have landed between the calls; look once more before alarming.
+                snapshot = await self._snapshot()
         except BrokerError:
             self._reconciled = False
             return False
-        await self._store.record_equity(
-            at=now, net_liquidation=account.net_liquidation, cash=account.cash
+        account, orders, booked, actual = (
+            snapshot.account,
+            snapshot.orders,
+            snapshot.booked,
+            snapshot.actual,
         )
+        if account.net_liquidation > 0:
+            await self._store.record_equity(
+                at=now, net_liquidation=account.net_liquidation, cash=account.cash
+            )
+        else:
+            await self._problem(
+                "bad-equity", "Mäklaren rapporterar ett orimligt kontovärde (noll eller negativt)."
+            )
 
         for order in orders:
             if await self._store.order(order.client_order_id) is None:
                 await self._problem(
+                    f"foreign-order:{order.client_order_id}",
                     f"Mäklaren har en order som jag inte skapat ({order.client_order_id}, "
-                    f"{order.symbol}). Jag pausar nya affärer tills den är utredd."
+                    f"{order.symbol}). Jag pausar nya affärer tills den är utredd.",
                 )
             else:
                 # Also catches an order the journal believes is finished but still works.
                 await self._apply(order, now)
-        booked = await self._store.booked_positions()
-        actual = {p.symbol: p.quantity for p in positions}
         if booked != actual:
             await self._problem(
+                "position-mismatch",
                 "Mina positioner stämmer inte med mäklarens. "
-                f"Jag: {_describe(booked)}. Mäklaren: {_describe(actual)}."
+                f"Jag: {_describe(booked)}. Mäklaren: {_describe(actual)}.",
             )
         unknown = sorted(s for s in actual if s not in self._instruments)
         if unknown:
-            await self._problem(f"Jag saknar uppgifter om innehavet {', '.join(unknown)}.")
-        covered = _stop_coverage(orders)
+            await self._problem(
+                f"unknown-holding:{','.join(unknown)}",
+                f"Jag saknar uppgifter om innehavet {', '.join(unknown)}.",
+            )
+        try:
+            covered = (await self._active_stops(orders)).coverage
+        except BrokerError:
+            self._reconciled = False
+            return False
         unprotected = sorted(s for s, q in actual.items() if covered.get(s, 0) < q)
         if unprotected:
             await self._problem(
-                f"Positionen i {', '.join(unprotected)} saknar fullt skydd av en stopporder."
+                f"unprotected:{','.join(unprotected)}",
+                f"Positionen i {', '.join(unprotected)} saknar fullt skydd av en stopporder.",
             )
         self._alerted &= self._problems
         self._reconciled = not self._problems
         return self._reconciled
+
+    async def _snapshot(self) -> _Snapshot:
+        await self.sync()
+        account = await self._call(self._broker.account())
+        positions = await self._call(self._broker.positions())
+        orders = await self._call(self._broker.open_orders())
+        return _Snapshot(
+            account=account,
+            orders=orders,
+            booked=await self._store.booked_positions(),
+            actual={p.symbol: p.quantity for p in positions},
+        )
+
+    async def _active_stops(self, orders: tuple[BrokerOrder, ...]) -> _Stops:
+        """Protection that is real right now. A bracket's stop only protects what its entry
+        has bought and its children have not yet sold; the stop of a resting, unfilled
+        entry protects nothing."""
+        coverage: dict[str, int] = {}
+        levels: dict[str, Decimal] = {}
+        for order in orders:
+            if order.stop_price is None or order.side is not Side.SELL or order.parent_id is None:
+                continue
+            parent = await self._call(self._broker.order(order.parent_id))
+            bought = parent.filled_quantity if parent is not None else 0
+            sold = 0
+            for sibling_id in (f"{order.parent_id}.stop", f"{order.parent_id}.tp"):
+                sibling = await self._call(self._broker.order(sibling_id))
+                sold += sibling.filled_quantity if sibling is not None else 0
+            active = min(order.quantity - order.filled_quantity, bought - sold)
+            if active <= 0:
+                continue
+            coverage[order.symbol] = coverage.get(order.symbol, 0) + active
+            known = levels.get(order.symbol)
+            levels[order.symbol] = (
+                order.stop_price if known is None else min(known, order.stop_price)
+            )
+        return _Stops(coverage, levels)
 
     # -- risk context ---------------------------------------------------------------------------
 
@@ -431,7 +558,12 @@ class ExecutionEngine:
         broker_positions = await self._call(self._broker.positions())
         orders = await self._call(self._broker.open_orders())
 
-        stops = _stop_levels(orders)
+        if account.net_liquidation > 0:  # fresh marks for the circuit breakers
+            await self._store.record_equity(
+                at=now, net_liquidation=account.net_liquidation, cash=account.cash
+            )
+        active = await self._active_stops(orders)
+        stops = active.levels
         positions: dict[str, Position] = {}
         for bp in broker_positions:
             known = self._instruments.get(bp.symbol)
@@ -465,7 +597,7 @@ class ExecutionEngine:
             account=account,
             positions=positions,
             pending=pending,
-            protected=_stop_coverage(orders),
+            protected=active.coverage,
             quotes=quotes,
             session=self._sessions(instrument, now),
             breakers=await self.trading_status(now),
@@ -481,26 +613,35 @@ def _child_ids(request: OrderRequest) -> list[str]:
     return ids
 
 
-def _stop_coverage(orders: tuple[BrokerOrder, ...]) -> dict[str, int]:
-    """Shares covered by working protective stops, per symbol."""
-    covered: dict[str, int] = {}
-    for order in orders:
-        if order.stop_price is not None and order.side is Side.SELL and order.status.is_working:
-            remaining = order.quantity - order.filled_quantity
-            covered[order.symbol] = covered.get(order.symbol, 0) + remaining
-    return covered
+@dataclass(frozen=True, slots=True)
+class _Snapshot:
+    account: Account
+    orders: tuple[BrokerOrder, ...]
+    booked: dict[str, int]
+    actual: dict[str, int]
 
 
-def _stop_levels(orders: tuple[BrokerOrder, ...]) -> dict[str, Decimal]:
-    """The lowest working stop per symbol (the one that protects least)."""
-    levels: dict[str, Decimal] = {}
-    for order in orders:
-        if order.stop_price is not None and order.status.is_working:
-            current = levels.get(order.symbol)
-            levels[order.symbol] = (
-                order.stop_price if current is None else min(current, order.stop_price)
-            )
-    return levels
+@dataclass(frozen=True, slots=True)
+class _Stops:
+    coverage: dict[str, int]  # shares really protected, per symbol
+    levels: dict[str, Decimal]  # the lowest active stop, per symbol
+
+
+def _identity_mismatch(stored: StoredOrder, view: BrokerOrder) -> str | None:
+    """Is the broker's order really the one Jarvis journaled under this id?"""
+    if view.symbol != stored.symbol:
+        return f"symbol {view.symbol} i stället för {stored.symbol}"
+    if view.side.value != stored.side:
+        return "fel riktning"
+    if (
+        view.limit_price is not None
+        and stored.limit_price is not None
+        and view.limit_price != stored.limit_price
+    ):
+        return f"limitpris {view.limit_price} i stället för {stored.limit_price}"
+    if stored.parent_id is None and view.quantity != stored.quantity:
+        return f"antal {view.quantity} i stället för {stored.quantity}"
+    return None
 
 
 def _describe(positions: Mapping[str, int]) -> str:

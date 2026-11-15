@@ -77,7 +77,7 @@ Delsteg (byggs mot `SimBroker`, kräver inget av Adam):
       tomma lägen, felläge; skärmdumpar i `docs/screenshots/` (med exempeldata)
 - [ ] API-tjänsten som ger hemskärmen riktig data (`/status`, `/portfolio`, `/trades`, `/today`)
 - [ ] Hemskärmens e2e-kontroll (`npm run e2e`) i CI
-- [ ] Granskning av `execution/` (avbröts av användningsgränsen, ska köras om)
+- [x] Granskning av `execution/`, fem fel rättade med test (D17)
 - [ ] IBKR-adapter (`ib_async`) mot Paper — **kräver Adams paper-inloggning**
 - [ ] Driftsättning på gratisserver — **kräver att Adam skapar kontot (D9)**
 - [ ] Automatisk pappershandel utan fel (inget minimikrav på tid, D14)

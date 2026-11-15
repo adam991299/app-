@@ -73,3 +73,24 @@ att Jarvis kan testas mot en simulerad mäklare och senare kopplas till IBKR uta
 - Om bara en del av ett köp fylls skyddar stoppen exakt den del som köpts.
 - Den simulerade mäklaren beter sig som ett ISK: köp utan täckning och blankning avvisas, och
   ett kursras förbi stoppen säljs till raspriset, inte till stoppriset.
+
+## 3. Från signal till order
+
+Orderhanteringen (`backend/src/jarvis/execution/`) tar en signal från en strategi och gör så här:
+
+1. **Risk-kontroll.** Beslutet sparas alltid, även ett nej, med skälen.
+2. **Journal först.** Ordern skrivs in i databasen innan den skickas. Varje signal har ett
+   eget ID, så samma signal kan aldrig bli två order, inte ens efter en krasch.
+3. **Köp med stopp.** Köpet skickas tillsammans med sin stop-loss, som ligger hos mäklaren.
+4. **Utgång genom att höja stoppen.** Jarvis flyttar stoppen uppåt efter hand och sänker den
+   aldrig. Positionen är därför alltid skyddad.
+5. **Avstämning varje minut.** Jarvis jämför sina böcker med mäklarens. Mäklaren har alltid
+   rätt. Handeln stoppas och du får ett larm om
+   - positionerna inte stämmer,
+   - mäklaren har en order eller affär som Jarvis inte gjort,
+   - någon position saknar fullt skydd av en stopporder,
+   - kontovärdet är orimligt.
+   Handeln återupptas av sig själv när allt stämmer igen.
+
+Efter en omstart läser Jarvis in läget från mäklaren. Order som aldrig hann skickas stängs,
+och order som mäklaren hann ta emot tas över.

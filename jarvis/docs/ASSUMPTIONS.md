@@ -33,6 +33,8 @@ flyttas då till "Verifierat" med datum och källa.
 | 2026-11-14 | Next.js 16.4.6 är aktuell version; appen bygger med App Router och TypeScript strict. | registry.npmjs.org, `npm run build` |
 
 ## Kända begränsningar
+- **Orderhanteringen:** se listan i beslut D17 (insättningar/uttag, en instans, kvittering av
+  problem, 7 dagars fyllnadshistorik).
 - **Docker-avbilderna är låsta till exakt version men inte till digest.** Digest-låsning och
   automatiska uppdateringar görs i Fas 7 (§10). `ib-gateway` använder taggen `stable` tills
   den verifieras i Fas 0.5 (A2).

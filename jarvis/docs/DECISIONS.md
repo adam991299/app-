@@ -4,6 +4,31 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-15
 
+### D17. Beslut efter granskningen av orderhanteringen
+Granskaren hittade fem fel, alla rättade med test:
+- En stopp som hör till ett köp som ännu inte gått igenom räknades som skydd. Nu räknas
+  bara skydd som är aktivt: det köpet faktiskt har köpt minus det som redan sålts.
+- En stopp kunde sänkas om Jarvis kraschat mellan mäklaren och journalen. Nu jämförs alltid
+  med mäklarens stoppnivå, och journalen tar över mäklarens värde vid avstämning.
+- Ett larm som inte gick att skicka försvann. Nu sparas det och skickas igen vid nästa
+  avstämning, och ett misslyckat larm avbryter aldrig avstämningen.
+- Efter en krock mellan order-ID kunde handeln återupptas. Nu kontrolleras att mäklarens
+  order verkligen är den Jarvis skapade (symbol, riktning, pris, antal); annars står handeln
+  still tills det är utrett.
+- Att mäklaren säger nej räknades som driftstopp. Nu räknas bara tappad anslutning.
+
+Dessutom: ett orimligt kontovärde (noll eller negativt) stoppar handeln men sparas inte, så
+att det inte kan utlösa kill switch av misstag; ett larm om avvikande positioner skickas en
+gång, inte varje minut; en omspelad signal som mäklaren redan tagit emot känns igen.
+
+**Kända begränsningar, byggs i Fas 5/7** (står också i `ASSUMPTIONS.md`):
+- Insättningar och uttag syns som vinst eller förlust i dags- och veckogränserna.
+- Bara en instans av orderhanteringen får köras; ett lås i databasen byggs med driften.
+- Problem som kräver utredning (en affär Jarvis inte gjort, en aktiesplit) har ingen
+  knapp för att kvitteras i appen ännu; handeln står still tills det rättats i databasen.
+- Fyllnader hämtas 7 dagar bakåt. Står Jarvis still längre än så behövs en manuell avstämning.
+- Kill switch-återställning nollställer toppvärdet men inte dagens och veckans lägsta.
+
 ### D16. Hemskärmen: ren CSS med design tokens, Tailwind väntar till Fas 6
 Specen nämner Tailwind. Hemskärmen är byggd med vanliga CSS-variabler (alla färger, mått och
 typsnitt som tokens enligt §9.1), eftersom en enda vy inte behöver mer. Tailwind-temat och
