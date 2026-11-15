@@ -21,12 +21,16 @@ flyttas då till "Verifierat" med datum och källa.
 | A11 | Årets skattefria grundnivå och schablonsats för ISK. Fälten i `config/default.yaml` är därför tomma, och ekonomimodulen ska vägra räkna skatt tills de är ifyllda från Skatteverket. | Ekonomimodulen |
 | A13 | Att IBKR:s papperskonto får samma gratis realtidsdata (Cboe One/IEX) som huvudkontot. | Fas 0.5 |
 | A14 | Oracle Cloud Always Free: exakt gräns efter 2026 års sänkning (rapporterat 2 OCPU/12 GB) och att Stockholm-regionen har ledig kapacitet. | Fas 7 |
+| A15 | Att en andra användare utan uttagsrätt går att skapa på ett privat ISK-konto. | Före riktig handel |
 | A12 | IBKR:s tider för daglig omstart och intervallet för ny 2FA-inloggning (specen anger "normalt en gång i veckan"). | Fas 0.5 |
 
 ## Verifierat
 
 | Datum | Vad | Källa |
 |---|---|---|
+| 2026-11-15 | Papperskontot har eget användarnamn och lösenord, som visas och återställs under Settings → Paper Trading Account. | interactivebrokers.com/docs (Finding your paper user credentials) |
+| 2026-11-15 | `gnzsnz/ib-gateway` använder `TWS_USERID`, `TWS_PASSWORD` och `TRADING_MODE` (standard paper). Taggen och körning på arm64 är fortfarande oprövade (A2). | hub.docker.com/r/gnzsnz/ib-gateway |
+| 2026-11-15 | Claudes IBKR-koppling i byggsessionen kan läsa dagskurser (prövat med AAPL). Den ger data till Claude, inte till Jarvis, och passar bara för små stickprov. | eget anrop |
 | 2026-11-15 | IBKR erbjuder gratis realtidsdata (ej konsoliderad) för amerikanska aktier och ETF:er från Cboe One och IEX; fördröjd data släpar 10–20 min. | interactivebrokers.com, sidan Market Data Pricing |
 | 2026-11-15 | `gnzsnz/ib-gateway` publiceras för både amd64 och arm64 (krävs för Oracles gratisservrar). | hub.docker.com/r/gnzsnz/ib-gateway/tags |
 | 2026-11-14 | `ib_async` underhålls: version 2.1.0 släpptes 2025-12-08. Kontrolleras igen innan broker-koden skrivs, eftersom senaste släpp då är snart ett år gammalt. | pypi.org/pypi/ib_async |

@@ -26,6 +26,8 @@ Jarvis byggs för att kosta **0 kr i fasta kostnader** (beslut D9 i
 - [ ] **Tailscale** (gratis) på telefonen och datorn, så att appen bara nås från dina enheter.
 - [ ] **IBKR Mobile** på telefonen för att godkänna 2FA.
 
+Steg för steg: [`docs/KOPPLING_IBKR.md`](docs/KOPPLING_IBKR.md).
+
 **Det som inte blir gratis:** courtage, valutaväxling och ISK-skatt när Jarvis handlar på
 riktigt, och chatten "Fråga Jarvis", som kräver en betald språkmodell och därför är
 avstängd tills du eventuellt väljer att slå på den.
