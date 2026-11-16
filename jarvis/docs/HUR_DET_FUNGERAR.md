@@ -94,3 +94,28 @@ Orderhanteringen (`backend/src/jarvis/execution/`) tar en signal från en strate
 
 Efter en omstart läser Jarvis in läget från mäklaren. Order som aldrig hann skickas stängs,
 och order som mäklaren hann ta emot tas över.
+
+## 4. Två strategier
+- **Trendföljning** (dagsdata): köper när en aktie stänger över sin högsta nivå på flera
+  veckor, säljer när trenden vänder. Få affärer, passar litet kapital.
+- **Daytrading** (5-minutersdata, USA): köper när kursen bryter över de första 15
+  minuternas högsta nivå. Samma aktie igen bara efter ny dagshögsta, högst 3 gånger. Allt
+  säljs 15 minuter före stängning. Högst 5 samtidigt; paus för dagen vid 1 % förlust eller
+  3 förluster i rad.
+- Ingen av dem handlar förrän den har klarat valideringen (walk-forward, låst slutperiod,
+  krav på att slå indexfonden).
+
+## 5. Bästa affären först (din grundprincip)
+Varje möjlig affär får en förväntad vinst i kronor (valideringens snitt × risken) och en
+kostnad (courtage, spread, växling). Affären skickas bara om vinsten är minst dubbelt så
+stor som kostnaden. Finns flera tas den som väntas ge mest först. Aktier där inte ens en
+aktie ryms i budgeten följs inte. Så anpassar sig Jarvis efter hur stort kontot är.
+
+## 6. Dina knappar (alla kräver Face ID)
+- **Paus / Kill switch:** inga nya affärer. Öppna positioner skyddas av stoppordrarna.
+- **Jarvis budget:** hur stor del av kontot Jarvis får använda. Alla gränser räknas mot
+  budgeten. Sänkning gäller direkt, höjning från i morgon, mer än dubbelt efter 24 timmar.
+- **Risknivå:** Försiktig, Balanserad eller Offensiv.
+- **Insättning/uttag:** registreras så att de inte räknas som vinst eller förlust.
+- **Riktig handel:** frasen `JAG FÖRSTÅR RISKEN` och startbudget. Stämmer inte valet med
+  kontot som gatewayn är inloggad på står handeln still.
