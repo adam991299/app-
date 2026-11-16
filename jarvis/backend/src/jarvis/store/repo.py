@@ -4,7 +4,7 @@ audit log in the same transaction, so the log can never miss a change (§10)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from jarvis.broker.models import Fill, OrderStatus
 from jarvis.domain import Side
 from jarvis.risk.breakers import EquityMarks
+from jarvis.risk.profiles import RiskProfile
 from jarvis.store.db import session_factory
 from jarvis.store.periods import day_start, week_start
 from jarvis.store.tables import (
@@ -161,6 +162,33 @@ class Store:
             kill_switch_reason=None,
             peak_reset_at=at,
         )
+
+    async def set_risk_profile(self, profile: RiskProfile, *, actor: str, at: datetime) -> datetime:
+        """A lower level applies at once; a higher one from the next trading day (§7.1).
+        Returns when the new level takes effect."""
+        current = await self.risk_profile(at)
+        effective = at if profile.rank <= current.rank else day_start(at) + timedelta(days=1)
+        await self._change_controls(
+            at=at,
+            actor=actor,
+            action="risk_profile",
+            details={
+                "from": current.value,
+                "to": profile.value,
+                "effective": effective.isoformat(),
+            },
+            previous_risk_profile=current.value,
+            risk_profile=profile.value,
+            risk_profile_from=effective,
+        )
+        return effective
+
+    async def risk_profile(self, now: datetime) -> RiskProfile:
+        async with self._sessions() as session:
+            row = await session.get_one(Controls, 1)
+            if row.risk_profile_from is not None and now < row.risk_profile_from:
+                return RiskProfile(row.previous_risk_profile)
+            return RiskProfile(row.risk_profile)
 
     async def audit(
         self, *, actor: str, action: str, at: datetime, details: dict[str, Any] | None = None

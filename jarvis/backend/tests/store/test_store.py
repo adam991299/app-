@@ -369,3 +369,16 @@ async def test_emptied_account_keeps_the_index_and_zero_flow_is_refused(store: S
     assert marks.current == D(10000)
     with pytest.raises(ValueError, match="zero"):
         await store.record_cash_flow(D(0), at=NOW, note="x")
+
+
+async def test_raising_the_risk_level_waits_for_the_next_day(store: Store) -> None:
+    from jarvis.risk.profiles import RiskProfile
+
+    assert await store.risk_profile(NOW) is RiskProfile.BALANCED
+    effective = await store.set_risk_profile(RiskProfile.OFFENSIVE, actor="adam", at=NOW)
+    assert effective == datetime(2026, 11, 16, 23, tzinfo=UTC)  # midnight in Stockholm
+    assert await store.risk_profile(NOW) is RiskProfile.BALANCED
+    assert await store.risk_profile(effective) is RiskProfile.OFFENSIVE
+    lowered = await store.set_risk_profile(RiskProfile.CAUTIOUS, actor="adam", at=effective)
+    assert lowered == effective  # lowering applies at once
+    assert await store.risk_profile(effective) is RiskProfile.CAUTIOUS

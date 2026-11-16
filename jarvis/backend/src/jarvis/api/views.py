@@ -20,6 +20,7 @@ from jarvis.api.schemas import (
 )
 from jarvis.config.settings import Settings
 from jarvis.markets.calendar import CalendarRangeError, Exchange, next_open, session_at
+from jarvis.risk.profiles import NAMES_SV
 from jarvis.risk.reasons import Reason, message_sv
 from jarvis.store.periods import day_start
 from jarvis.store.repo import Store, TradeRecord
@@ -144,7 +145,7 @@ class Views:
         return TodayOut(
             trades_count=await self._store.count_fills_since(day_start(now)),
             realized_pnl=None,  # needs lot matching; built with the economics module
-            risk_level_sv="Standard",
+            risk_level_sv=NAMES_SV[await self._store.risk_profile(now)],
         )
 
 

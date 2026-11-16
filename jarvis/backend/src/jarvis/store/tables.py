@@ -44,6 +44,9 @@ class Controls(Base):
     kill_switch_engaged: Mapped[bool] = mapped_column(Boolean, default=False)
     kill_switch_reason: Mapped[str | None] = mapped_column(Text)
     peak_reset_at: Mapped[datetime | None] = mapped_column(UTC_TIME)
+    risk_profile: Mapped[str] = mapped_column(String(16), server_default="balanced")
+    previous_risk_profile: Mapped[str] = mapped_column(String(16), server_default="balanced")
+    risk_profile_from: Mapped[datetime | None] = mapped_column(UTC_TIME)
     updated_at: Mapped[datetime] = mapped_column(UTC_TIME)
 
 

@@ -49,6 +49,7 @@ from jarvis.risk.engine import (
     RiskContext,
     RiskEngine,
 )
+from jarvis.risk.profiles import apply_profile
 from jarvis.risk.reasons import Reason
 from jarvis.store.periods import day_start
 from jarvis.store.repo import NewOrder, Store, StoredOrder
@@ -121,7 +122,6 @@ class ExecutionEngine:
         self._broker = broker
         self._store = store
         self._risk = risk
-        self._checker = RiskEngine(risk)
         self._instruments = instruments
         self._quotes = quotes
         self._sessions = sessions
@@ -251,7 +251,8 @@ class ExecutionEngine:
             )
             return Result(Outcome.REJECTED_BY_RISK, cid, (Reason.NOT_RECONCILED,))
 
-        decision = self._checker.check(proposal, context)
+        profile = await self._store.risk_profile(now)
+        decision = RiskEngine(apply_profile(self._risk, profile)).check(proposal, context)
         await self._store.record_risk_decision(
             at=now,
             client_order_id=cid,

@@ -25,6 +25,7 @@ from jarvis.domain.ticks import round_down
 from jarvis.execution.engine import EntrySignal, ExecutionEngine, Outcome
 from jarvis.markets.calendar import CalendarRangeError, Exchange, session_at
 from jarvis.research.costs import CostModel
+from jarvis.risk.profiles import apply_profile
 from jarvis.risk.sizing import size_position
 from jarvis.store.repo import Store
 from jarvis.strategy.bars import Bar
@@ -243,6 +244,7 @@ class Runner:
         reserve = (
             account.net_liquidation * Decimal(str(self._risk.portfolio.min_cash_reserve_pct)) / 100
         )
+        risk = apply_profile(self._risk, await self._store.risk_profile(self._clock()))
         sized = size_position(
             instrument=instrument,
             equity=account.net_liquidation,
@@ -250,7 +252,7 @@ class Runner:
             entry=limit,
             stop=stop,
             fx_to_base=quote.fx_to_base,
-            risk=self._risk,
+            risk=risk,
         )
         if sized.quantity == 0:
             return

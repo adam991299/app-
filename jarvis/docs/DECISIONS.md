@@ -4,6 +4,13 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D24. Risknivåer
+Tre nivåer (§9.2): **Försiktig** (0,5 % risk per affär, position max 7,5 %),
+**Balanserad** (specens standard: 0,75 % och 10 %) och **Offensiv** (1,5 % och 20 %, och
+gap-scenariot får då kosta upp till 5 %). Circuit breakers och kill switch är desamma i alla
+nivåer. En höjning gäller från nästa dags början (svensk tid), en sänkning direkt (§7.1).
+Byts med `python -m jarvis.store.profile offensiv` tills appen får knappen (med passkey).
+
 ### D23. Litet kapital och insättningar (Adams situation)
 Adam börjar med 10 000–80 000 kr och sätter in pengar då och då. Därför:
 - In- och uttag räknas inte som vinst eller förlust. Varje kontovärde sparas också som ett

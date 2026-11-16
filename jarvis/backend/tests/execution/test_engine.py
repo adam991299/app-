@@ -677,3 +677,15 @@ async def test_prices_are_rounded_to_ticks_without_adding_risk(world: World) -> 
     assert (await world.store.known_order(f"{result.client_order_id}.stop")).stop_price == D(
         "96.50"
     )
+
+
+async def test_the_offensive_level_allows_a_larger_position(world: World) -> None:
+    from jarvis.risk.profiles import RiskProfile
+
+    big = signal("big", quantity=150, stop_price=D(99))  # 15 % of the capital
+    assert Reason.POSITION_LIMIT in (await world.engine.submit_entry(big)).reasons
+    await world.store.set_risk_profile(RiskProfile.OFFENSIVE, actor="adam", at=NOW)
+    world.clock.now = NOW + timedelta(days=1)
+    world.price("AAPL", "100")
+    result = await world.engine.submit_entry(signal("big2", quantity=150, stop_price=D(99)))
+    assert Reason.POSITION_LIMIT not in result.reasons
