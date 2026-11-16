@@ -9,6 +9,9 @@ from decimal import Decimal
 from typing import Any
 
 from jarvis.api.schemas import (
+    DayTradeOut,
+    DaytradingOut,
+    DaytradingStatus,
     MarketOut,
     PortfolioOut,
     PositionOut,
@@ -23,14 +26,14 @@ from jarvis.markets.calendar import CalendarRangeError, Exchange, next_open, ses
 from jarvis.risk.profiles import NAMES_SV
 from jarvis.risk.reasons import Reason, message_sv
 from jarvis.store.periods import day_start
-from jarvis.store.repo import Store, TradeRecord
+from jarvis.store.repo import RoundTrip, Store, TradeRecord
 
 STATE_MAX_AGE = timedelta(minutes=3)
 CENT = Decimal("0.01")
 NO_STATE_SV = "Jag har ingen lägesrapport från handelsdelen ännu."
 STALE_STATE_SV = "Jag har inte fått någon färsk lägesrapport från handelsdelen på flera minuter."
 MARKET_NAMES_SV = {Exchange.NYSE: "USA", Exchange.STOCKHOLM: "Stockholm"}
-STRATEGY_NAMES_SV = {"trend": "Trendföljning"}
+STRATEGY_NAMES_SV = {"trend": "Trendföljning", "orb": "Daytrading"}
 
 
 def strategy_sv(strategy: str | None) -> str | None:
@@ -140,6 +143,45 @@ class Views:
         records = await self._store.recent_trades(limit)
         return TradesOut(trades=[_trade(r) for r in records])
 
+    async def daytrading(self) -> DaytradingOut:
+        now = self._clock()
+        limits = self._settings.risk.daytrading
+        stored = await self._store.strategy_state("orb")
+        account = await self._store.account_state()
+        base = account[1]["base_currency"] if account is not None else "SEK"
+        trips = await self._store.round_trips("orb", day_start(now))
+        trades = [_day_trade(t) for t in sorted(trips, key=lambda t: t.first_at, reverse=True)]
+        status: DaytradingStatus
+        status, text, open_count, result, losses, at = (
+            "unknown",
+            NO_DAYTRADING_SV,
+            None,
+            None,
+            None,
+            now,
+        )
+        if stored is not None and now - stored[0] > STATE_MAX_AGE:
+            text = STALE_DAYTRADING_SV
+        elif stored is not None:
+            at, payload = stored
+            status, text = payload["status"], _daytrading_sv(payload)
+            open_count, losses = payload["open_count"], payload["losses_in_row"]
+            day_result = _money(payload["day_result"])
+            result = None if day_result is None else day_result.quantize(CENT)
+        return DaytradingOut(
+            status=status,
+            status_sv=text,
+            open_count=open_count,
+            max_open=self._settings.risk.concurrency.max_concurrent_daytrades,
+            day_result=result,
+            base_currency=base,
+            losses_in_row=losses,
+            max_daily_loss_pct=limits.max_daily_loss_pct,
+            pause_after_losses=limits.pause_after_consecutive_losses,
+            trades=trades,
+            as_of=at,
+        )
+
     async def today(self) -> TodayOut:
         now = self._clock()
         return TodayOut(
@@ -147,6 +189,48 @@ class Views:
             realized_pnl=None,  # needs lot matching; built with the economics module
             risk_level_sv=NAMES_SV[await self._store.risk_profile(now)],
         )
+
+
+NO_DAYTRADING_SV = "Jag har ingen lägesrapport från daytradingen ännu."
+STALE_DAYTRADING_SV = (
+    "Jag har inte fått någon färsk lägesrapport från daytradingen på flera minuter."
+)
+DAYTRADING_SV = {
+    "not_validated": "Daytrading är avstängd tills strategin har klarat valideringen.",
+    "market_closed": "Börsen i USA är stängd. Jag letar efter utbrott när den öppnar.",
+    "active": "Jag letar efter utbrott.",
+    "full": "Jag har max antal daytrades öppna och väntar på att någon stängs.",
+    "closing": "Jag stänger dagens daytrades före börsens slut.",
+    "unknown": "Jag kan inte kontrollera gränserna just nu, så jag öppnar inga nya daytrades.",
+}
+
+
+def _daytrading_sv(payload: dict[str, Any]) -> str:
+    status = payload["status"]
+    if status == "losses_in_row":
+        return (
+            f"Jag har pausat daytrading för i dag efter {payload['losses_in_row']} förluster i rad."
+        )
+    if status == "daily_loss":
+        pct = f"{payload['max_daily_loss_pct']:g}".replace(".", ",")
+        return f"Jag har pausat daytrading för i dag: dagens förlust nådde {pct} % av kapitalet."
+    return DAYTRADING_SV[status]
+
+
+def _day_trade(trip: RoundTrip) -> DayTradeOut:
+    return DayTradeOut(
+        id=trip.entry_id,
+        symbol=trip.symbol,
+        currency=trip.currency,
+        quantity=trip.bought,
+        buy_price=None if trip.buy_price is None else trip.buy_price.quantize(CENT),
+        sell_price=None if trip.sell_price is None else trip.sell_price.quantize(CENT),
+        result=None if trip.result is None else trip.result.quantize(CENT),
+        is_open=trip.result is None,
+        opened_at=trip.first_at,
+        closed_at=None if trip.result is None else trip.last_at,
+        explanation_sv=trip.explanation_sv,
+    )
 
 
 def _exact(value: Decimal) -> Decimal:

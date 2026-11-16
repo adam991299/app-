@@ -105,3 +105,45 @@ class TodayOut(_Schema):
     trades_count: int
     realized_pnl: Money | None  # base currency
     risk_level_sv: str  # e.g. "Balanserad"
+
+
+class DayTradeOut(_Schema):
+    id: str
+    symbol: str
+    currency: str
+    quantity: int  # bought
+    buy_price: Money | None  # average
+    sell_price: Money | None  # average of what has been sold
+    result: Money | None  # after commission, in ``currency``; null while open
+    is_open: bool
+    opened_at: datetime
+    closed_at: datetime | None
+    explanation_sv: str | None
+
+
+DaytradingStatus = Literal[
+    "not_validated",
+    "market_closed",
+    "active",
+    "full",
+    "losses_in_row",
+    "daily_loss",
+    "closing",
+    "unknown",
+]
+
+
+class DaytradingOut(_Schema):
+    """GET /api/daytrading — today's day trades and whether new ones may be opened."""
+
+    status: DaytradingStatus
+    status_sv: str
+    open_count: int | None
+    max_open: int
+    day_result: Money | None  # today's closed day trades, base currency
+    base_currency: str
+    losses_in_row: int | None
+    max_daily_loss_pct: float
+    pause_after_losses: int
+    trades: list[DayTradeOut]  # today's, newest first
+    as_of: datetime

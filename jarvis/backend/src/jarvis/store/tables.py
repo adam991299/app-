@@ -160,6 +160,17 @@ class AccountState(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
+class StrategyState(Base):
+    """The latest status of a running strategy (e.g. whether day trading is paused for the
+    day and why), written by the runner and read by the app."""
+
+    __tablename__ = "strategy_state"
+
+    strategy: Mapped[str] = mapped_column(String(32), primary_key=True)
+    at: Mapped[datetime] = mapped_column(UTC_TIME)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
 class ResearchTrial(Base):
     """Every backtest variant ever tried, failures included (§6.3 item 9)."""
 

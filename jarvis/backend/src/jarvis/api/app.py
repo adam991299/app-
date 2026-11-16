@@ -11,7 +11,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, Query
 
-from jarvis.api.schemas import PortfolioOut, StatusOut, TodayOut, TradesOut
+from jarvis.api.schemas import DaytradingOut, PortfolioOut, StatusOut, TodayOut, TradesOut
 from jarvis.api.views import Views
 from jarvis.config.settings import Settings
 from jarvis.service.app import create_app
@@ -38,5 +38,9 @@ def create_api_app(store: Store, settings: Settings, clock: Callable[[], datetim
     @app.get("/today")
     async def today() -> TodayOut:
         return await views.today()
+
+    @app.get("/daytrading")
+    async def daytrading() -> DaytradingOut:
+        return await views.daytrading()
 
     return app

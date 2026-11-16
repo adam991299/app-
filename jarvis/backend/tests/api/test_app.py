@@ -260,3 +260,94 @@ def test_unknown_strategy_ids_are_shown_as_they_are() -> None:
 
     assert strategy_sv("experiment-7") == "experiment-7"
     assert strategy_sv(None) is None
+
+
+async def test_daytrading_without_a_report_says_so(client: httpx.AsyncClient) -> None:
+    body = (await client.get("/daytrading")).json()
+    assert body["status"] == "unknown"
+    assert body["status_sv"] == "Jag har ingen lägesrapport från daytradingen ännu."
+    assert body["trades"] == []
+    assert body["base_currency"] == "SEK"
+    assert (body["max_open"], body["pause_after_losses"]) == (5, 3)
+
+
+async def test_daytrading_shows_todays_trades_and_why_it_paused(
+    client: httpx.AsyncClient, store: Store, clock: Clock
+) -> None:
+    def order(cid: str, kind: str, side: str, parent: str | None = None) -> NewOrder:
+        return NewOrder(
+            cid,
+            kind,
+            "AMD",
+            side,
+            10,
+            D(150),
+            D(140),
+            strategy="orb",
+            explanation_sv="Daytrade: kursen bröt över de första 15 minuternas högsta nivå."
+            if kind == "entry"
+            else None,
+            currency="USD",
+            parent_id=parent,
+        )
+
+    for entry in ("orb:AMD:2026-11-16", "orb:AMD:2026-11-16:2"):
+        await store.add_order(order(entry, "entry", "buy"), at=NOW)
+        await store.add_order(order(f"{entry}.stop", "stop", "sell", entry), at=NOW)
+    fills = [
+        ("orb:AMD:2026-11-16", Side.BUY, "150"),
+        ("orb:AMD:2026-11-16.stop", Side.SELL, "140"),
+        ("orb:AMD:2026-11-16:2", Side.BUY, "152"),
+    ]
+    for i, (cid, side, price) in enumerate(fills):
+        await store.record_fill(
+            Fill(f"d{i}", cid, "AMD", side, 10, D(price), D(1), NOW + timedelta(minutes=i))
+        )
+    await store.save_strategy_state(
+        "orb",
+        {
+            "status": "losses_in_row",
+            "open_count": 1,
+            "max_open": 5,
+            "day_result": "-1020.004",
+            "losses_in_row": 3,
+            "max_daily_loss_pct": 1.0,
+            "pause_after_losses": 3,
+        },
+        at=NOW,
+    )
+    body = (await client.get("/daytrading")).json()
+    assert body["status_sv"] == "Jag har pausat daytrading för i dag efter 3 förluster i rad."
+    assert (body["open_count"], body["day_result"], body["losses_in_row"]) == (1, "-1020.00", 3)
+    newest, first = body["trades"]
+    assert newest["is_open"] is True
+    assert newest["result"] is None
+    assert newest["closed_at"] is None
+    assert (first["buy_price"], first["sell_price"], first["result"]) == (
+        "150.00",
+        "140.00",
+        "-102.00",
+    )
+    assert first["explanation_sv"].startswith("Daytrade:")
+    clock.now = NOW + timedelta(minutes=10)
+    stale = (await client.get("/daytrading")).json()
+    assert stale["status"] == "unknown"
+    assert "flera minuter" in stale["status_sv"]
+
+
+@pytest.mark.parametrize(
+    ("status", "text"),
+    [
+        (
+            "daily_loss",
+            "Jag har pausat daytrading för i dag: dagens förlust nådde 1,5 % av kapitalet.",
+        ),
+        ("not_validated", "Daytrading är avstängd tills strategin har klarat valideringen."),
+        ("active", "Jag letar efter utbrott."),
+    ],
+)
+def test_daytrading_wording(status: str, text: str) -> None:
+    from jarvis.api.views import _daytrading_sv
+
+    payload = {"status": status, "losses_in_row": 0, "max_daily_loss_pct": 1.5}
+    assert _daytrading_sv(payload) == text

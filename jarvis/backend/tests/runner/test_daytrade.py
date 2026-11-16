@@ -39,10 +39,11 @@ class Market:
         self.breakout_bar = 3  # index of the bar that closes above the range
         self.closes: dict[int, Decimal] = {}  # later closes by bar index, for every symbol
         self.calls = 0
+        self.fx = D(1)  # USD to the account's base currency
 
     async def quote(self, inst: Instrument) -> Quote | None:
         price = self.prices.get(inst.symbol)
-        return None if price is None else Quote(inst.symbol, price, D(1), self.clock.now)
+        return None if price is None else Quote(inst.symbol, price, self.fx, self.clock.now)
 
     async def intraday_bars(
         self, inst: Instrument, *, now: datetime, days: int = 1
@@ -245,7 +246,8 @@ async def test_a_win_resets_the_loss_streak(store: Store) -> None:
     await trader.tick()
     results = await store.closed_results("orb", OPEN)
     assert len(results) == 1
-    assert results[0] > 0
+    assert results[0][0] > 0
+    assert results[0][1] == "USD"
     assert await store.order("orb:XOM:2026-11-16") is not None
 
 
@@ -318,3 +320,55 @@ async def test_the_same_stock_is_traded_again_after_a_new_high(store: Store) -> 
     clock.now = OPEN + 10 * BAR + timedelta(seconds=30)
     await trader.tick()
     assert await store.order(f"{first}:4") is None  # three a day is the maximum
+
+
+async def stopped_out(store: Store, fx: Decimal) -> tuple[DayTrader, Market, Clock]:
+    """One AAPL day trade stopped out at 98 (a loss of a few hundred dollars), then the next
+    bar breaks out in XOM."""
+    risk = Risk(concurrency=Concurrency(max_concurrent_daytrades=1))
+    trader, sim, market, clock = await make(store, risk=risk)
+    await approve(store)
+    await trader.tick()
+    sim.set_price("AAPL", D(98))
+    await trader._engine.reconcile()
+    market.fx = fx
+    clock.now += BAR
+    market.breakout_bar = 4
+    await trader.tick()
+    return trader, market, clock
+
+
+async def test_the_daily_loss_is_counted_in_the_base_currency(store: Store) -> None:
+    await stopped_out(store, D(1))
+    assert await store.order("orb:XOM:2026-11-16") is not None  # a $-loss below 1 % of 100 000
+    state = await store.strategy_state("orb")
+    assert state is not None
+    assert state[1]["status"] in ("active", "full")
+
+
+async def test_the_same_loss_in_kronor_pauses_day_trading(store: Store) -> None:
+    await stopped_out(store, D(10))  # the loss is ten times larger in the base currency
+    assert await store.order("orb:XOM:2026-11-16") is None
+    state = await store.strategy_state("orb")
+    assert state is not None
+    assert state[1]["status"] == "daily_loss"
+    assert D(state[1]["day_result"]) < -1000
+    assert state[1]["losses_in_row"] == 1
+
+
+async def test_without_an_exchange_rate_day_trading_waits(store: Store) -> None:
+    trader, market, clock = await stopped_out(store, D(1))
+    market.prices = {}
+    clock.now += BAR
+    await trader.tick()
+    state = await store.strategy_state("orb")
+    assert state is not None
+    assert state[1]["status"] == "unknown"
+
+
+async def test_the_state_says_why_nothing_trades(store: Store) -> None:
+    trader, *_ = await make(store)
+    await trader.tick()
+    state = await store.strategy_state("orb")
+    assert state is not None
+    assert state[1]["status"] == "not_validated"

@@ -13,6 +13,7 @@ import logging
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Protocol
 
 from jarvis.broker import BrokerAdapter, BrokerError
@@ -90,17 +91,20 @@ class DayTrader:
         return sorted(open_ids)
 
     async def tick(self) -> None:
+        now = self._clock()
         approval = await self._store.latest_validation(NAME)
         if approval is None or not approval[0] or approval[2] is None or approval[1] <= 0:
+            await self._publish(now, Status.NOT_VALIDATED)
             return
         params, edge_r = params_from(approval[2]), approval[1]
-        now = self._clock()
         try:
             session = session_at(self._exchange, now)
         except CalendarRangeError:
+            await self._publish(now, Status.MARKET_CLOSED)
             return
         opens, closes = session.opens_at, session.closes_at
         if opens is None or closes is None or not session.is_open(now):
+            await self._publish(now, Status.MARKET_CLOSED)
             return
         if now >= flat_time(closes, params):
             for entry_id in await self._open_day_trades():
@@ -108,6 +112,7 @@ class DayTrader:
                     await self._engine.close_position(
                         entry_id, "Daytrade stängd före börsens slut."
                     )
+            await self._publish(now, Status.CLOSING)
             return
         if not await self._may_open_more(now):
             return
@@ -152,23 +157,69 @@ class DayTrader:
         return signal_id, await self._store.last_fill_at(previous) or now
 
     async def _may_open_more(self, now: datetime) -> bool:
-        limits = self._risk.daytrading
-        if len(await self._open_day_trades()) >= self._risk.concurrency.max_concurrent_daytrades:
-            return False
+        """Checks the day-trading limits, publishes the outcome and says whether a new day
+        trade may be opened. Anything that cannot be checked counts as a stop (rule 2)."""
+        open_count = len(await self._open_day_trades())
         results = await self._store.closed_results(NAME, day_start(now))
-        losses_in_row = 0
-        for result in reversed(results):
-            if result >= 0:
-                break
-            losses_in_row += 1
-        if losses_in_row >= limits.pause_after_consecutive_losses:
-            return False
+        in_base: list[Decimal] = []
+        for amount, currency in results:
+            fx = await self._fx_to_base(currency)
+            if fx is None:
+                await self._publish(now, Status.UNKNOWN, open_count=open_count)
+                return False
+            in_base.append(amount * fx)
         try:
             account = await self._broker.account()
         except BrokerError:
+            await self._publish(now, Status.UNKNOWN, open_count=open_count)
             return False
-        limit = account.net_liquidation * Decimal(str(limits.max_daily_loss_pct)) / 100
-        return sum(results, Decimal(0)) > -limit
+        status = day_status(
+            in_base,
+            account.net_liquidation,
+            self._risk,
+            open_count=open_count,
+        )
+        await self._publish(
+            now,
+            status,
+            open_count=open_count,
+            day_result=sum(in_base, Decimal(0)),
+            losses_in_row=losses_in_row(in_base),
+        )
+        return status is Status.ACTIVE
+
+    async def _fx_to_base(self, currency: str) -> Decimal | None:
+        """Today's rate from ``currency`` to the base currency, from a live quote of a
+        traded instrument in that currency."""
+        for instrument in self._instruments.values():
+            if instrument.currency == currency:
+                quote = await self._market.quote(instrument)
+                return None if quote is None else quote.fx_to_base
+        return None
+
+    async def _publish(
+        self,
+        now: datetime,
+        status: Status,
+        *,
+        open_count: int | None = None,
+        day_result: Decimal | None = None,
+        losses_in_row: int | None = None,
+    ) -> None:
+        limits = self._risk.daytrading
+        await self._store.save_strategy_state(
+            NAME,
+            {
+                "status": status.value,
+                "open_count": open_count,
+                "max_open": self._risk.concurrency.max_concurrent_daytrades,
+                "day_result": None if day_result is None else str(day_result),
+                "losses_in_row": losses_in_row,
+                "max_daily_loss_pct": limits.max_daily_loss_pct,
+                "pause_after_losses": limits.pause_after_consecutive_losses,
+            },
+            at=now,
+        )
 
     async def _enter(
         self,
@@ -225,3 +276,36 @@ class DayTrader:
             )
         )
         logger.info("day trade %s: %s %s", signal_id, result.outcome, result.reasons)
+
+
+class Status(StrEnum):
+    NOT_VALIDATED = "not_validated"
+    MARKET_CLOSED = "market_closed"
+    ACTIVE = "active"
+    FULL = "full"
+    LOSSES_IN_ROW = "losses_in_row"
+    DAILY_LOSS = "daily_loss"
+    CLOSING = "closing"
+    UNKNOWN = "unknown"
+
+
+def losses_in_row(results: list[Decimal]) -> int:
+    count = 0
+    for result in reversed(results):
+        if result >= 0:
+            break
+        count += 1
+    return count
+
+
+def day_status(results: list[Decimal], equity: Decimal, risk: Risk, *, open_count: int) -> Status:
+    """Whether a new day trade may be opened, from today's closed results (base currency,
+    oldest first) and the capital."""
+    limits = risk.daytrading
+    if losses_in_row(results) >= limits.pause_after_consecutive_losses:
+        return Status.LOSSES_IN_ROW
+    if sum(results, Decimal(0)) <= -equity * Decimal(str(limits.max_daily_loss_pct)) / 100:
+        return Status.DAILY_LOSS
+    if open_count >= risk.concurrency.max_concurrent_daytrades:
+        return Status.FULL
+    return Status.ACTIVE

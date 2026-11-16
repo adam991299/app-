@@ -1,5 +1,208 @@
 {
   "endpoints": {
+    "GET /api/daytrading": {
+      "$defs": {
+        "DayTradeOut": {
+          "additionalProperties": false,
+          "properties": {
+            "buy_price": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Buy Price"
+            },
+            "closed_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Closed At"
+            },
+            "currency": {
+              "title": "Currency",
+              "type": "string"
+            },
+            "explanation_sv": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Explanation Sv"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "is_open": {
+              "title": "Is Open",
+              "type": "boolean"
+            },
+            "opened_at": {
+              "format": "date-time",
+              "title": "Opened At",
+              "type": "string"
+            },
+            "quantity": {
+              "title": "Quantity",
+              "type": "integer"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Result"
+            },
+            "sell_price": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sell Price"
+            },
+            "symbol": {
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "symbol",
+            "currency",
+            "quantity",
+            "buy_price",
+            "sell_price",
+            "result",
+            "is_open",
+            "opened_at",
+            "closed_at",
+            "explanation_sv"
+          ],
+          "title": "DayTradeOut",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "GET /api/daytrading — today's day trades and whether new ones may be opened.",
+      "properties": {
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "base_currency": {
+          "title": "Base Currency",
+          "type": "string"
+        },
+        "day_result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Day Result"
+        },
+        "losses_in_row": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Losses In Row"
+        },
+        "max_daily_loss_pct": {
+          "title": "Max Daily Loss Pct",
+          "type": "number"
+        },
+        "max_open": {
+          "title": "Max Open",
+          "type": "integer"
+        },
+        "open_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Open Count"
+        },
+        "pause_after_losses": {
+          "title": "Pause After Losses",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "not_validated",
+            "market_closed",
+            "active",
+            "full",
+            "losses_in_row",
+            "daily_loss",
+            "closing",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "status_sv": {
+          "title": "Status Sv",
+          "type": "string"
+        },
+        "trades": {
+          "items": {
+            "$ref": "#/$defs/DayTradeOut"
+          },
+          "title": "Trades",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "status_sv",
+        "open_count",
+        "max_open",
+        "day_result",
+        "base_currency",
+        "losses_in_row",
+        "max_daily_loss_pct",
+        "pause_after_losses",
+        "trades",
+        "as_of"
+      ],
+      "title": "DaytradingOut",
+      "type": "object"
+    },
     "GET /api/portfolio": {
       "$defs": {
         "PositionOut": {

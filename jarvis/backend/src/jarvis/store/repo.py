@@ -28,6 +28,7 @@ from jarvis.store.tables import (
     OrderRow,
     ResearchTrial,
     RiskDecisionRow,
+    StrategyState,
     ValidationRow,
 )
 
@@ -84,6 +85,66 @@ class TradeRecord:
     stop_price: Decimal | None
     limit_price: Decimal | None
     currency: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RoundTrip:
+    """One entry and what has been sold of it. ``result`` (after commission, in
+    ``currency``) is set once everything bought has been sold."""
+
+    entry_id: str
+    symbol: str
+    currency: str
+    bought: int
+    buy_price: Decimal | None  # average
+    sold: int
+    sell_price: Decimal | None  # average
+    result: Decimal | None
+    first_at: datetime
+    last_at: datetime
+    explanation_sv: str | None
+
+
+@dataclass(slots=True)
+class _Trip:
+    symbol: str
+    currency: str
+    first_at: datetime
+    explanation_sv: str | None = None
+    bought: int = 0
+    sold: int = 0
+    paid: Decimal = Decimal(0)
+    received: Decimal = Decimal(0)
+    commission: Decimal = Decimal(0)
+    last_at: datetime | None = None
+
+    def add(
+        self, buy: bool, quantity: int, price: Decimal, commission: Decimal, at: datetime
+    ) -> None:
+        if buy:
+            self.bought += quantity
+            self.paid += quantity * price
+        else:
+            self.sold += quantity
+            self.received += quantity * price
+        self.commission += commission
+        self.last_at = at
+
+    def record(self, entry_id: str) -> RoundTrip:
+        closed = self.bought > 0 and self.sold == self.bought
+        return RoundTrip(
+            entry_id=entry_id,
+            symbol=self.symbol,
+            currency=self.currency,
+            bought=self.bought,
+            buy_price=self.paid / self.bought if self.bought else None,
+            sold=self.sold,
+            sell_price=self.received / self.sold if self.sold else None,
+            result=self.received - self.paid - self.commission if closed else None,
+            first_at=self.first_at,
+            last_at=self.last_at or self.first_at,
+            explanation_sv=self.explanation_sv,
+        )
 
 
 def _stored(row: OrderRow) -> StoredOrder:
@@ -454,6 +515,23 @@ class Store:
             row = await session.get(AccountState, 1)
             return (row.at, row.payload) if row is not None else None
 
+    async def save_strategy_state(
+        self, strategy: str, payload: dict[str, Any], *, at: datetime
+    ) -> None:
+        async with self._sessions.begin() as session:
+            await session.execute(
+                insert(StrategyState)
+                .values(strategy=strategy, at=at, payload=payload)
+                .on_conflict_do_update(
+                    index_elements=[StrategyState.strategy], set_={"at": at, "payload": payload}
+                )
+            )
+
+    async def strategy_state(self, strategy: str) -> tuple[datetime, dict[str, Any]] | None:
+        async with self._sessions() as session:
+            row = await session.get(StrategyState, strategy)
+            return (row.at, row.payload) if row is not None else None
+
     async def recent_trades(self, limit: int) -> list[TradeRecord]:
         async with self._sessions() as session:
             rows = await session.execute(
@@ -493,10 +571,10 @@ class Store:
             )
         return found
 
-    async def closed_results(self, strategy: str, since: datetime) -> list[Decimal]:
-        """Profit or loss (after commission) of each of the strategy's entries that has
-        been fully sold, oldest first. Entries are matched to their stop, target and exit
-        orders by id (``<entry>.stop``, ``<entry>.tp``, ``<entry>.exitN``)."""
+    async def round_trips(self, strategy: str, since: datetime) -> list[RoundTrip]:
+        """The strategy's entries with fills since ``since``, oldest first, each with its
+        stop, target and exit orders (matched by id: ``<entry>.stop``, ``<entry>.tp``,
+        ``<entry>.exitN``). Amounts are in the instrument's currency."""
         async with self._sessions() as session:
             rows = (
                 await session.execute(
@@ -506,21 +584,23 @@ class Store:
                     .order_by(FillRow.at, FillRow.fill_id)
                 )
             ).all()
-        trades: dict[str, list[Decimal]] = {}  # entry id -> [bought, sold, cash]
-        last_fill: dict[str, datetime] = {}
-        for fill, order in rows:
-            entry = order.parent_id or order.client_order_id.split(".exit")[0]
-            state = trades.setdefault(entry, [Decimal(0), Decimal(0), Decimal(0)])
-            value = fill.quantity * fill.price
-            if fill.side == "buy":
-                state[0] += fill.quantity
-                state[2] -= value + fill.commission
-            else:
-                state[1] += fill.quantity
-                state[2] += value - fill.commission
-            last_fill[entry] = fill.at
-        closed = [e for e, (bought, sold, _) in trades.items() if bought and bought == sold]
-        return [trades[e][2] for e in sorted(closed, key=lambda e: last_fill[e])]
+            trips: dict[str, _Trip] = {}
+            for fill, order in rows:
+                entry = order.parent_id or order.client_order_id.split(".exit")[0]
+                trip = trips.get(entry)
+                if trip is None:
+                    trip = trips[entry] = _Trip(fill.symbol, order.currency or "", fill.at)
+                    entry_row = await session.get(OrderRow, entry)
+                    trip.explanation_sv = entry_row.explanation_sv if entry_row else None
+                trip.add(fill.side == "buy", fill.quantity, fill.price, fill.commission, fill.at)
+        return [trip.record(entry) for entry, trip in trips.items()]
+
+    async def closed_results(self, strategy: str, since: datetime) -> list[tuple[Decimal, str]]:
+        """(result after commission, currency) of each fully sold entry, in order of the
+        last sale."""
+        trips = [t for t in await self.round_trips(strategy, since) if t.result is not None]
+        trips.sort(key=lambda t: t.last_at)
+        return [(t.result, t.currency) for t in trips if t.result is not None]
 
     async def entry_strategies(self) -> dict[str, str]:
         """The strategy of the most recent entry per symbol (who owns the position)."""
