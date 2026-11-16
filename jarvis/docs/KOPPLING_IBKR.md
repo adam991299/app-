@@ -113,6 +113,19 @@ När gatewayn startar loggar den in på papperskontot. IBKR kan be dig godkänna
 **IBKR Mobile**. Ungefär en gång i veckan behöver du godkänna igen; Jarvis ska då skicka en
 notis. Under tiden skyddas öppna positioner av stoppordrarna hos mäklaren.
 
+## Steg 7 – Din passkey i appen
+Appen kräver passkey (Face ID) för allt som ändrar något: insättningar och uttag, risknivå
+och senare paus och riktig handel.
+1. Passkeys kräver en riktig HTTPS-adress. Slå på **MagicDNS** och **HTTPS Certificates**
+   i Tailscale (Admin console → DNS) och sätt `JARVIS_DOMAIN` i `.env` till serverns
+   Tailscale-namn, t.ex. `jarvis.ditt-namn.ts.net`.
+2. Hämta engångskoden på servern: `grep JARVIS_PASSKEY_SETUP_CODE .env`.
+3. Öppna appen på telefonen → **Inställningar** (längst ned på hemskärmen) → skriv koden →
+   **Skapa passkey** → godkänn med Face ID.
+4. Ta sedan bort raden `JARVIS_PASSKEY_SETUP_CODE` ur `.env` och starta om (`docker compose
+   up -d`). Då kan ingen annan skapa en passkey. Fler passkeys (t.ex. för datorn) kan bara
+   läggas till när du redan är inloggad.
+
 ## Senare – riktig handel
 Riktig handel är ett eget beslut som du tar i appen. Inför det skapar du en **andra
 användare** för boten på ditt riktiga konto, med rätt att handla men **utan rätt att ta ut

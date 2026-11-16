@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { DaytradingCard } from "@/components/Daytrading";
@@ -250,7 +251,12 @@ export function Home() {
         </div>
       </div>
 
-      <footer className="caption footer">Uppdaterad {formatTime(status.data.as_of)}</footer>
+      <footer className="caption footer">
+        Uppdaterad {formatTime(status.data.as_of)} ·{" "}
+        <Link className="footer-link" href="/installningar">
+          Inställningar
+        </Link>
+      </footer>
     </div>
   );
 }

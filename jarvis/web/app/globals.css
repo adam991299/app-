@@ -547,3 +547,98 @@ ul {
   top: auto;
   bottom: calc(100% + 4px);
 }
+
+/* Settings and forms */
+.form {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.form .button {
+  margin-top: 0;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font: var(--text-footnote);
+  color: var(--color-text-secondary);
+}
+
+.field input {
+  font: var(--text-body);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-divider);
+  border-radius: 12px;
+  padding: 12px var(--space-2);
+  min-height: 44px;
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--color-glow-from);
+  outline-offset: 1px;
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--color-warning);
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--color-surface-raised);
+  border-radius: 12px;
+  padding: 3px;
+}
+
+.segmented button {
+  font: var(--text-subhead);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  min-height: 38px;
+  cursor: pointer;
+}
+
+.segmented button[aria-checked="true"] {
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.button.small {
+  font: var(--text-subhead);
+  padding: 8px var(--space-2);
+  margin-top: 0;
+  min-height: 36px;
+}
+
+.button.quiet {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.block {
+  display: block;
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.footer-link {
+  color: var(--color-glow-from);
+  text-decoration: none;
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+}

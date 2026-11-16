@@ -107,5 +107,67 @@ await page.getByText("Pausad", { exact: true }).waitFor();
 assert.equal(await page.locator(".orb").getAttribute("data-tone"), "dimmed");
 assert.equal(await page.locator(".orb-core").evaluate((el) => getComputedStyle(el).animationName), "none");
 
+// Settings: passkey setup with a virtual authenticator (WebAuthn needs the localhost host).
+for (const [name, size] of Object.entries(SIZES)) {
+  const context = await browser.newContext({ viewport: size, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true },
+  });
+  let registered = false;
+  let loggedIn = false;
+  const sent = {};
+  const challenge = "dGVzdC1jaGFsbGVuZ2UtMzItYnl0ZXMtbG9uZy0xMjM0";
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === "POST") {
+      sent[path] = { headers: request.headers(), body: request.postDataJSON() };
+    }
+    if (path === "/api/auth/state") return route.fulfill({ json: { registered, logged_in: loggedIn } });
+    if (path === "/api/today") return route.fulfill({ json: fx.today });
+    if (path === "/api/auth/register/options") {
+      if (request.postDataJSON().setup_code !== "kod-123") return route.fulfill({ status: 403, json: { detail: "Fel engångskod." } });
+      return route.fulfill({ json: {
+        rp: { name: "Jarvis", id: "localhost" }, user: { id: "YWRhbQ", name: "adam", displayName: "Adam" },
+        challenge, pubKeyCredParams: [{ type: "public-key", alg: -7 }], timeout: 60000, excludeCredentials: [],
+        authenticatorSelection: { residentKey: "required", requireResidentKey: true, userVerification: "required" }, attestation: "none",
+      } });
+    }
+    if (path === "/api/auth/register/verify") { registered = true; loggedIn = true; return route.fulfill({ json: { ok: true } }); }
+    if (path === "/api/actions/options") return route.fulfill({ json: { challenge, timeout: 60000, rpId: "localhost", allowCredentials: [], userVerification: "required" } });
+    if (path === "/api/actions/deposit") return route.fulfill({ json: { message_sv: "Jag har registrerat insättningen. Den räknas inte som vinst eller förlust." } });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto("http://localhost:3111/installningar");
+  await page.getByRole("heading", { name: "Skapa din passkey" }).waitFor();
+  await page.screenshot({ path: `${SHOTS}settings-setup-${name}.png`, fullPage: true });
+  await page.getByLabel("Engångskod").fill("fel");
+  await page.getByRole("button", { name: "Skapa passkey" }).click();
+  await page.getByText("Fel engångskod.").waitFor();
+  await page.getByLabel("Engångskod").fill("kod-123");
+  await page.getByRole("button", { name: "Skapa passkey" }).click();
+  await page.getByRole("heading", { name: "Insättning eller uttag" }).waitFor();
+  const attestation = sent["/api/auth/register/verify"].body.credential;
+  assert.equal(attestation.type, "public-key");
+  assert.ok(attestation.response.attestationObject.length > 50);
+  assert.equal(sent["/api/auth/register/verify"].headers["x-jarvis"], "1");
+
+  await page.getByLabel("Belopp i kronor").fill("12 500,50");
+  await page.getByRole("button", { name: "Bekräfta med passkey" }).click();
+  await page.getByText("Jag har registrerat insättningen.", { exact: false }).waitFor();
+  assert.deepEqual(sent["/api/actions/options"].body, { action: "deposit", payload: { amount: "12500.50", note: "" } });
+  assert.equal(sent["/api/actions/deposit"].body.amount, "12500.50");
+  assert.ok(sent["/api/actions/deposit"].body.credential.response.signature.length > 20);
+  await page.getByRole("radio", { name: "Uttag" }).click();
+  await page.getByLabel("Belopp i kronor").fill("12,345");
+  assert.equal(await page.getByRole("button", { name: "Bekräfta med passkey" }).isDisabled(), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+  await page.screenshot({ path: `${SHOTS}settings-${name}.png`, fullPage: true });
+  await context.close();
+}
+
 await browser.close();
-console.log("OK: home, day-trading and economics states verified, screenshots saved");
+console.log("OK: home, day-trading, economics and settings verified, screenshots saved");

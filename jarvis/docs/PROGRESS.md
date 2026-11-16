@@ -2,6 +2,23 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Passkey-inloggning och skyddade åtgärder (D28)
+
+- WebAuthn med py_webauthn 3.0.1 och @simplewebauthn/browser 14.0.0. Första passkeyn kräver
+  engångskoden från `.env`; fler bara när man är inloggad. Face ID (användarverifiering)
+  krävs alltid.
+- Insättning/uttag och risknivå kräver inloggning **och** en ny passkey-bekräftelse som är
+  bunden till exakt den åtgärden och de värdena. Allt skrivs i revisionsloggen.
+- Skydd: cookie HttpOnly/Secure/SameSite=Strict (bara hash av token sparas), samma
+  ursprung + `X-Jarvis`-huvud på alla POST, begränsning av antal försök, engångsutmaningar
+  som går ut efter 2 minuter.
+- Sidan `/installningar` med formulär för insättning/uttag och val av risknivå.
+- Verifierat: 21 backend-tester med en mjukvaru-passkey som signerar på riktigt (fel kod,
+  främmande nyckel, förfalskad signatur, utan Face ID, fel webbplats, återanvänd och utgången
+  bekräftelse, manipulerat belopp); Playwright med virtuell passkey i Chromium; skärmdumpar
+  `docs/screenshots/settings-*`. 590 backend-tester gröna, pip-audit och npm audit utan fynd.
+- Kvar: paus/kill switch och byte till riktig handel bakom passkey (§9.4).
+
 ## 2026-11-16 — Ekonomivyn (D27)
 
 - `GET /api/economics` och sidan `/ekonomi` (kort på hemskärmen): Jarvis mot indexfonden i

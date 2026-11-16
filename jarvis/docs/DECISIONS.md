@@ -4,6 +4,15 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D28. Passkeys och skyddade åtgärder
+Bara Adam: den första passkeyn kräver en slumpad engångskod som bara finns i serverns
+`.env`. Varje ändring kräver, utöver inloggning, en ny passkey-bekräftelse bunden till
+åtgärden och dess värden (en stulen cookie räcker inte). Insättningar registreras i Jarvis;
+själva överföringen görs hos IBKR, eftersom bot-användaren medvetet saknar rätt att flytta
+pengar. Försöksbegränsningen räknar per adress; bakom Caddy är det i praktiken en gemensam
+gräns (20 per minut), vilket räcker för en användare. cbor2 låstes till 6.1.5 eftersom
+6.3.0 var tre dagar gammal.
+
 ### D27. Ekonomivyn: jämförelsen med indexfonden
 Indexfonden är S&P 500-ETF:n SPY tills Adam väljer en egen (`economics.index_fund_*` i
 config). Körslingan sparar dess stängningskurs och dagens växelkurs efter varje handelsdag,
