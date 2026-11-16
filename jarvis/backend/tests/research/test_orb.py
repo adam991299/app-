@@ -63,9 +63,9 @@ def test_bar_and_parameter_validation() -> None:
 def test_setup_found_on_the_first_breakout() -> None:
     bars = session([(100.5, 101.6, 100.4, 101.5)])
     close = bars[-1].at + timedelta(minutes=5)
-    setup = setup_for(bars, close, P)
+    setup = setup_for(bars[:4], close, P)
     assert setup is not None
-    assert (setup.range_high, setup.range_low, setup.signal_at) == (D(101), D(99), bars[3].at)
+    assert (setup.level, setup.range_low, setup.signal_at) == (D(101), D(99), bars[3].at)
     assert setup.target(D("101.5"), P) == D("101.5") + 2 * (D("101.5") - D(99))
     assert flat_time(close, P) == close - timedelta(minutes=15)
     assert setup_for(bars[:3], close, P) is None
@@ -74,9 +74,9 @@ def test_setup_found_on_the_first_breakout() -> None:
 def test_no_setup_without_breakout_or_too_late() -> None:
     quiet = session([])
     close = quiet[-1].at + timedelta(minutes=5)
-    assert setup_for(quiet, close, P) is None
+    assert all(setup_for(quiet[:n], close, P) is None for n in range(1, 79))
     late = session([(100, 100.1, 99.9, 100)] * 63 + [(100, 102, 100, 101.9)])
-    assert setup_for(late, late[-1].at + timedelta(minutes=5), P) is None
+    assert setup_for(late[:67], late[-1].at + timedelta(minutes=5), P) is None
 
 
 def test_target_hit() -> None:
@@ -110,9 +110,11 @@ def test_everything_is_closed_before_the_close() -> None:
     assert bars[trade.exit_index].at == bars[-1].at + timedelta(minutes=5) - timedelta(minutes=15)
 
 
-def test_open_below_the_stop_means_no_entry_and_one_trade_per_day() -> None:
+def test_open_below_the_stop_skips_the_entry_and_the_next_breakout_counts() -> None:
     gap = session([(100.5, 101.6, 100.4, 101.5), (98, 98.5, 97, 98), (101, 103, 101, 102.5)])
-    assert run_orb(gap, P, costs=FREE)[0].trades == []
+    (trade,) = run_orb(gap, P, costs=FREE)[0].trades
+    assert trade.entry_index == 6
+    assert trade.entry_price == 102.5
 
 
 def test_stopped_on_the_entry_bar() -> None:
@@ -121,11 +123,57 @@ def test_stopped_on_the_entry_bar() -> None:
     assert (trade.entry_index, trade.exit_index, trade.exit_price) == (4, 4, 99)
 
 
-def test_three_losses_in_a_row_sit_out_the_next_day() -> None:
-    losing = [(100.5, 101.6, 100.4, 101.5), (101.5, 101.6, 101.4, 101.5), (97, 97.5, 96, 97)]
-    days = [session(losing, OPEN + timedelta(days=d)) for d in range(5)]
-    result, _ = run_orb([b for day in days for b in day], P, costs=FREE)
-    assert len(result.trades) == 4  # days 1-3 lose, day 4 is skipped, day 5 trades
+BREAKOUT_THEN_STOP = [
+    (100.5, 101.6, 100.4, 101.5),
+    (101.5, 101.6, 101.4, 101.5),
+    (97, 97.5, 96, 97),
+]
+
+
+def test_a_new_trade_the_same_day_needs_a_close_above_the_days_high() -> None:
+    bars = session(
+        [
+            *BREAKOUT_THEN_STOP,
+            (97, 101.55, 97, 101.5),  # above the range high, not above the day's high 101.6
+            (101.5, 102, 101.4, 101.8),  # above the day's high: a new signal
+        ]
+    )
+    first, second = run_orb(bars, P, costs=FREE)[0].trades
+    assert first.exit_index == 5
+    assert second.entry_index == 8
+    close = bars[-1].at + timedelta(minutes=5)
+    assert setup_for(bars[:7], close, P, after=bars[5].at) is None
+    again = setup_for(bars[:8], close, P, after=bars[5].at)
+    assert again is not None
+    assert (again.level, again.range_low) == (D("101.6"), D(99))
+    assert setup_for(bars[:8], close, P, after=bars[7].at) is None  # not after the exit
+
+
+def test_at_most_three_trades_per_symbol_and_day() -> None:
+    path: list[tuple[float, float, float, float]] = []
+    top = 101.6
+    for _ in range(5):  # each round: a new high, an entry, then a fall to the stop
+        top += 1
+        path += [(top - 0.5, top, top - 0.6, top - 0.1), (top - 0.1, top, top - 0.2, top - 0.1)]
+        path += [(98, 98.5, 97, 98)]
+    result, _ = run_orb(session(path), P, costs=FREE)
+    assert len(result.trades) == 3
+
+
+def test_every_backtest_entry_is_a_setup_for_signal() -> None:
+    """The backtest's incremental rule and setup_for (used live) agree."""
+    for seed in range(8):
+        bars = random_days(seed, 3)
+        result, _ = run_orb(bars, P, costs=FREE)
+        previous_exit: dict[date, datetime] = {}
+        for trade in result.trades:
+            signal = bars[trade.entry_index - 1]
+            day = [b for b in bars if b.day == signal.day]
+            upto = day[: day.index(signal) + 1]
+            close = day[-1].at + timedelta(minutes=5)
+            after = previous_exit.get(signal.day)
+            assert setup_for(upto, close, P, after) is not None
+            previous_exit[signal.day] = bars[trade.exit_index].at
 
 
 def random_days(seed: int, n: int, drift: float = 0.0) -> list[IntradayBar]:

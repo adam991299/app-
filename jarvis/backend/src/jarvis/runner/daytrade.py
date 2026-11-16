@@ -30,6 +30,7 @@ from jarvis.store.periods import day_start
 from jarvis.store.repo import Store
 from jarvis.strategy.orb import (
     BAR,
+    MAX_TRADES_PER_SYMBOL,
     NAME,
     IntradayBar,
     OrbParameters,
@@ -111,24 +112,44 @@ class DayTrader:
         if not await self._may_open_more(now):
             return
         for symbol, instrument in self._instruments.items():
-            signal_id = f"{NAME}:{symbol}:{now.date().isoformat()}"
-            if await self._store.order(signal_id) is not None:
-                continue  # at most one day trade per symbol and day
+            signal_id, after = await self._next_signal(symbol, now)
+            if signal_id is None:
+                continue
             newest_end = opens + ((now - opens) // BAR) * BAR
             if self._checked.get(symbol) == newest_end:
                 continue  # no new 5-minute bar since the last look (IBKR pacing limits)
             self._checked[symbol] = newest_end
             bars = await self._market.intraday_bars(instrument, now=now)
             todays = [b for b in bars if b.at >= opens]
-            setup = setup_for(todays, closes, params)
+            setup = setup_for(todays, closes, params, after)
             if setup is None or setup.signal_at + BAR < newest_end:
                 continue  # no breakout, or it happened earlier and the move is no longer fresh
             try:
-                await self._enter(signal_id, instrument, setup, params, edge_r)
+                await self._enter(signal_id, instrument, setup, params, edge_r, again=bool(after))
             except BrokerError:
                 logger.exception("day-trade entry for %s failed", symbol)
             if not await self._may_open_more(now):
                 return
+
+    async def _next_signal(self, symbol: str, now: datetime) -> tuple[str | None, datetime | None]:
+        """The id for the symbol's next day trade today and when its previous one ended, or
+        (None, None) while one is still open or the day's maximum is used."""
+        day = now.date().isoformat()
+        previous = None
+        for number in range(1, MAX_TRADES_PER_SYMBOL + 1):
+            signal_id = f"{NAME}:{symbol}:{day}" + ("" if number == 1 else f":{number}")
+            if await self._store.order(signal_id) is None:
+                break
+            previous = signal_id
+        else:
+            return None, None
+        if previous is None:
+            return signal_id, None
+        for order in await self._store.open_orders():
+            related = order.client_order_id.startswith(previous + ".")
+            if order.client_order_id == previous or order.parent_id == previous or related:
+                return None, None
+        return signal_id, await self._store.last_fill_at(previous) or now
 
     async def _may_open_more(self, now: datetime) -> bool:
         limits = self._risk.daytrading
@@ -156,6 +177,8 @@ class DayTrader:
         setup: OrbSetup,
         params: OrbParameters,
         edge_r: float,
+        *,
+        again: bool,
     ) -> None:
         quote = await self._market.quote(instrument)
         if quote is None:
@@ -192,10 +215,13 @@ class DayTrader:
                 expected_edge=Decimal(str(edge_r)) * risk_amount,
                 estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
                 explanation_sv=(
-                    f"Daytrade: kursen bröt över de första {params.range_minutes} minuternas "
-                    f"högsta nivå ({setup.range_high}). Stopp vid lägsta nivån {stop}."
-                ),
-                features={"range_high": str(setup.range_high), "range_low": str(stop)},
+                    f"Daytrade igen: kursen bröt över dagens högsta nivå ({setup.level}). "
+                    if again
+                    else f"Daytrade: kursen bröt över de första {params.range_minutes} "
+                    f"minuternas högsta nivå ({setup.level}). "
+                )
+                + f"Stopp vid öppningsintervallets lägsta nivå {stop}.",
+                features={"level": str(setup.level), "range_low": str(stop)},
             )
         )
         logger.info("day trade %s: %s %s", signal_id, result.outcome, result.reasons)

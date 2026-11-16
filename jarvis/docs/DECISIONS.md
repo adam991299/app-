@@ -4,6 +4,16 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D26. Fler daytrades per dag
+Adam: "du ska kunna köra flera day trades per dag" och "kör båda". (1) Universumet utökas
+från 20 till 50 stora, likvida amerikanska aktier i olika sektorer. (2) Samma aktie kan
+handlas upp till 3 gånger per dag: efter en avslutad affär krävs att en senare
+5-minutersstapel stänger över dagens högsta kurs hittills; stoppen ligger kvar vid
+öppningsintervallets botten. Regeln finns på samma sätt i backtestet (ett test jämför dem),
+så valideringen prövar exakt det som handlas. Kontogemensamma gränser (5 samtidigt, 1 %
+dagsförlust, 3 förluster i rad) gäller fortfarande och modelleras inte per aktie i
+backtestet; de kan bara göra handeln försiktigare.
+
 ### D25. Daytrading först, krypto senare
 Adam: "Kör utan krypto till en början." Krypto i ISK kräver kryptofonder på nordiska börser,
 och gratisdatan där är fördröjd; Jarvis handlar inte på fördröjda kurser. Daytrading byggs

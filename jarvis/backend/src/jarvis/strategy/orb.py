@@ -10,7 +10,9 @@ Rules on 5-minute bars of one session, using only bars that have finished:
   close; the entry is at the next bar's open.
 - Stop: the range low. Target: entry + ``target_r`` times (entry - stop).
 - Exit: stop or target, or at the open of the bar starting ``flat_minutes`` before the close.
-- At most one trade per symbol per day.
+- More trades in the same symbol the same day (at most ``MAX_TRADES_PER_SYMBOL``): after
+  a trade has ended, a later bar must close above the highest price of the day so far. The
+  stop stays at the range low.
 
 Two free parameters: ``range_minutes`` and ``target_r``.
 """
@@ -23,6 +25,7 @@ from decimal import Decimal
 
 NAME = "orb"
 BAR = timedelta(minutes=5)
+MAX_TRADES_PER_SYMBOL = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +73,7 @@ class OrbParameters:
 @dataclass(frozen=True, slots=True)
 class OrbSetup:
     signal_at: datetime  # start of the bar that broke out
-    range_high: Decimal
+    level: Decimal  # the price it closed above: the range high, or the day's high for a re-entry
     range_low: Decimal
 
     def target(self, entry: Decimal, params: OrbParameters) -> Decimal:
@@ -78,21 +81,30 @@ class OrbSetup:
 
 
 def setup_for(
-    session: list[IntradayBar], close: datetime, params: OrbParameters
+    session: list[IntradayBar],
+    close: datetime,
+    params: OrbParameters,
+    after: datetime | None = None,
 ) -> OrbSetup | None:
-    """The first breakout of the day among the bars given (all finished), or None."""
+    """Whether the newest bar of ``session`` (all finished, one session) is a buy signal.
+
+    Before the day's first trade in the symbol it must close above the range high. ``after``
+    is when the previous trade ended: the bar must start after it and close above the day's
+    high so far. The caller decides whether a trade is still allowed."""
     if len(session) <= params.range_bars:
         return None
+    bar = session[-1]
+    if bar.at + BAR > close - timedelta(minutes=params.last_entry_minutes):
+        return None
     opening = session[: params.range_bars]
-    high = max(b.high for b in opening)
     low = min(b.low for b in opening)
-    latest_end = close - timedelta(minutes=params.last_entry_minutes)
-    for bar in session[params.range_bars :]:
-        if bar.at + BAR > latest_end:
-            return None
-        if bar.close > high:
-            return OrbSetup(bar.at, high, low)
-    return None
+    if after is None:
+        level = max(b.high for b in opening)
+    elif bar.at <= after:
+        return None
+    else:
+        level = max(b.high for b in session[:-1])
+    return OrbSetup(bar.at, level, low) if bar.close > level else None
 
 
 def params_dict(params: OrbParameters) -> dict[str, object]:

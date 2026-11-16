@@ -2,6 +2,15 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Fler daytrades per dag (D26)
+
+- 50 aktier i stället för 20 (`config/universe_us.yaml`).
+- Samma aktie upp till 3 gånger per dag, efter ny dagshögsta (`strategy/orb.setup_for`,
+  `research/orb_backtest`, `runner/daytrade`). Backtestet och livehandeln följer samma regel.
+- 545 tester gröna, 100 % i risk, mäklare, order och ekonomi.
+- Öppet: om ISK hos IBKR är ett kontantkonto med T+1 (A6) och om 50 aktiers 5-minutersdata
+  ryms i IBKR:s gränser (A4). Båda provas i papper.
+
 ## 2026-11-16 — Daytrading (öppningsintervall, ORB) i körslingan
 
 **Gjort**

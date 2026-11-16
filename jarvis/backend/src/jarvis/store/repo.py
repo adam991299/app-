@@ -482,6 +482,17 @@ class Store:
             )
             return int(count or 0)
 
+    async def last_fill_at(self, entry_id: str) -> datetime | None:
+        """Time of the newest fill of an entry or of its stop, target and exit orders."""
+        async with self._sessions() as session:
+            found: datetime | None = await session.scalar(
+                select(func.max(FillRow.at)).where(
+                    (FillRow.client_order_id == entry_id)
+                    | FillRow.client_order_id.startswith(entry_id + ".", autoescape=True)
+                )
+            )
+        return found
+
     async def closed_results(self, strategy: str, since: datetime) -> list[Decimal]:
         """Profit or loss (after commission) of each of the strategy's entries that has
         been fully sold, oldest first. Entries are matched to their stop, target and exit

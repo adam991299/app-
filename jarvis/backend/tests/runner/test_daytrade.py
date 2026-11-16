@@ -37,6 +37,7 @@ class Market:
         self.clock = clock
         self.prices: dict[str, Decimal] = dict.fromkeys(SYMBOLS, D(102))
         self.breakout_bar = 3  # index of the bar that closes above the range
+        self.closes: dict[int, Decimal] = {}  # later closes by bar index, for every symbol
         self.calls = 0
 
     async def quote(self, inst: Instrument) -> Quote | None:
@@ -53,7 +54,7 @@ class Market:
             at = OPEN + i * BAR
             if at + BAR > now:
                 break
-            close = D(102) if i == self.breakout_bar else D(100)
+            close = self.closes.get(i, D(102) if i == self.breakout_bar else D(100))
             bars.append(IntradayBar(at, D(100), max(close, D(101)), D(99), close, 1000))
         return bars
 
@@ -289,3 +290,31 @@ async def test_nothing_runs_outside_the_session(store: Store, now: datetime) -> 
     await approve(store)
     await trader.tick()
     assert market.calls == 0
+
+
+async def test_the_same_stock_is_traded_again_after_a_new_high(store: Store) -> None:
+    trader, sim, market, clock = await make(store)
+    await approve(store)
+    await trader.tick()
+    first = "orb:AAPL:2026-11-16"
+    for number, bar_index, price in ((2, 5, D(103)), (3, 7, D(104))):
+        clock.now = OPEN + bar_index * BAR - BAR / 2  # the exit is before the signal bar
+        await trader.tick()
+        assert await store.order(f"{first}:{number}") is None  # the last trade is still open
+        sim.set_price("AAPL", D(130))  # the target fills
+        await trader._engine.reconcile()
+        market.closes[bar_index] = price  # a close above the day's high so far
+        market.prices["AAPL"] = price
+        sim.set_price("AAPL", price)
+        clock.now = OPEN + (bar_index + 1) * BAR + timedelta(seconds=30)
+        await trader.tick()
+        again = await store.order(f"{first}:{number}")
+        assert again is not None
+    assert await store.order("orb:XOM:2026-11-16:2") is None  # XOM still holds its first trade
+    sim.set_price("AAPL", D(130))
+    await trader._engine.reconcile()
+    market.closes[9] = D(105)
+    market.prices["AAPL"] = D(105)
+    clock.now = OPEN + 10 * BAR + timedelta(seconds=30)
+    await trader.tick()
+    assert await store.order(f"{first}:4") is None  # three a day is the maximum

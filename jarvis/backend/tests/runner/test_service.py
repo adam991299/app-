@@ -31,8 +31,8 @@ def test_ibkr_settings_need_the_paper_account() -> None:
 
 def test_shipped_universe_loads(tmp_path: Path) -> None:
     symbols = load_symbols(UNIVERSE)
-    assert len(symbols) == 20
-    assert len(set(symbols)) == 20
+    assert len(symbols) == 50
+    assert len(set(symbols)) == 50
     with pytest.raises(ConfigError, match="cannot read"):
         load_symbols(tmp_path / "missing.yaml")
     bad = tmp_path / "bad.yaml"

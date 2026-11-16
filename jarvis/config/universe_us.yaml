@@ -1,5 +1,6 @@
-# Amerikanska aktier som den tunna versionen följer (beslut D21). Stora, mycket likvida
-# bolag i olika sektorer. Sektorn hämtas från IBKR. Listan byts mot universumfiltret i Fas 1.
+# Amerikanska aktier som den tunna versionen följer (beslut D21, utökad till 50 i D26).
+# Stora, mycket likvida bolag i olika sektorer, så att daytradingen får fler utbrott att
+# välja bland. Sektorn hämtas från IBKR. Listan byts mot universumfiltret i Fas 1.
 symbols:
   - AAPL
   - MSFT
@@ -21,3 +22,33 @@ symbols:
   - HD
   - CAT
   - LIN
+  - AVGO
+  - ORCL
+  - CRM
+  - AMD
+  - ADBE
+  - NFLX
+  - TSLA
+  - BAC
+  - WFC
+  - GS
+  - MA
+  - ABBV
+  - MRK
+  - PFE
+  - TMO
+  - PEP
+  - MCD
+  - NKE
+  - SBUX
+  - DIS
+  - CMCSA
+  - T
+  - VZ
+  - BA
+  - GE
+  - HON
+  - UNP
+  - NEE
+  - DUK
+  - COP

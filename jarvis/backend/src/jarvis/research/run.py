@@ -3,7 +3,7 @@
 Run on the server, next to the gateway:
     python -m jarvis.research.run        (trend following, 10 years of daily bars)
     python -m jarvis.research.run orb    (day trading, one year of 5-minute bars; takes about
-                                          an hour because of IBKR's pacing rules)
+                                          two hours for 50 symbols because of IBKR pacing)
 Every variant tried is stored, the result decides whether the strategy may trade, and the
 Swedish report is printed and saved. Index comparison uses SPY's price history (the S&P 500
 as a yardstick; Adam's own index fund is chosen in the economics module).
