@@ -12,10 +12,11 @@ Procedure:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from statistics import fmean
+from typing import Any, Protocol
 
 from jarvis.config.settings import Validation
 from jarvis.research.costs import CostModel
@@ -35,8 +36,8 @@ FREE_PARAMETERS = 4  # entry and exit lookback, ATR period, ATR multiple
 
 
 @dataclass(frozen=True, slots=True)
-class Trial:
-    params: TrendParameters
+class Trial[P]:
+    params: P
     window: int
     sample: str  # "in", "out" or "holdout"
     sharpe: float  # per day
@@ -63,17 +64,25 @@ class Evaluation:
 
 
 @dataclass(slots=True)
-class ValidationReport:
+class ValidationReport[P]:
     passed: bool
     checks: list[Check]
-    chosen: TrendParameters | None
+    chosen: P | None
     out_of_sample: Evaluation
     holdout: Evaluation
-    trials: list[Trial]
+    trials: list[Trial[P]]
     edge_r: float  # mean out-of-sample result per trade, in units of initial risk
 
 
-def common_dates(series: Mapping[str, list[Bar]]) -> list[date]:
+class HasDay(Protocol):
+    @property
+    def day(self) -> date: ...
+
+
+Evaluator = Callable[[Mapping[str, Any], Any, date, date, CostModel], "Evaluation"]
+
+
+def common_dates(series: Mapping[str, Sequence[HasDay]]) -> list[date]:
     sets = [{b.day for b in bars} for bars in series.values()]
     return sorted(set.intersection(*sets)) if sets else []
 
@@ -118,9 +127,9 @@ def _windows(days: list[date], train: int, test: int) -> list[tuple[date, date, 
     return out
 
 
-def validate(
-    series: Mapping[str, list[Bar]],
-    grid: Sequence[TrendParameters],
+def validate[P](
+    series: Mapping[str, Sequence[Any]],
+    grid: Sequence[P],
     rules: Validation,
     *,
     benchmark: list[Bar] | None,
@@ -128,12 +137,15 @@ def validate(
     costs: CostModel | None = None,
     train_days: int = 504,
     test_days: int = 126,
-) -> ValidationReport:
+    evaluator: Evaluator | None = None,
+    free_parameters: int = FREE_PARAMETERS,
+) -> ValidationReport[P]:
     model = costs or CostModel()
+    run: Evaluator = evaluator or evaluate
     days = common_dates(series)
     cut = int(len(days) * (1 - rules.holdout_pct / 100))
     research, holdout_days = days[:cut], days[cut:]
-    trials: list[Trial] = []
+    trials: list[Trial[P]] = []
     oos = Evaluation()
     positive_windows = 0
     windows = _windows(research, train_days, test_days)
@@ -141,12 +153,12 @@ def validate(
     for number, (train_start, train_end, test_start, test_end) in enumerate(windows):
         scored = []
         for params in grid:
-            inside = evaluate(series, params, train_start, train_end, model)
+            inside = run(series, params, train_start, train_end, model)
             score = sharpe(inside.returns)
             trials.append(Trial(params, number, "in", score, len(inside.trades)))
             scored.append((score, params))
         best = max(scored, key=lambda pair: pair[0])[1]
-        outside = evaluate(series, best, test_start, test_end, model)
+        outside = run(series, best, test_start, test_end, model)
         trials.append(Trial(best, number, "out", sharpe(outside.returns), len(outside.trades)))
         oos.daily.update(outside.daily)
         oos.trades.extend(outside.trades)
@@ -156,14 +168,16 @@ def validate(
     holdout = Evaluation()
     if research and holdout_days:
         overall = [
-            (sharpe(evaluate(series, p, research[0], research[-1], model).returns), p) for p in grid
+            (sharpe(run(series, p, research[0], research[-1], model).returns), p) for p in grid
         ]
         chosen = max(overall, key=lambda pair: pair[0])[1]
-        holdout = evaluate(series, chosen, holdout_days[0], holdout_days[-1], model)
+        holdout = run(series, chosen, holdout_days[0], holdout_days[-1], model)
         trials.append(Trial(chosen, -1, "holdout", sharpe(holdout.returns), len(holdout.trades)))
 
     all_sharpes = [*earlier_trial_sharpes, *(t.sharpe for t in trials if t.sample == "in")]
-    checks = _checks(rules, oos, holdout, len(windows), positive_windows, all_sharpes, benchmark)
+    checks = _checks(
+        rules, oos, holdout, len(windows), positive_windows, all_sharpes, benchmark, free_parameters
+    )
     edge = fmean(t.r_multiple for t in oos.trades) if oos.trades else 0.0
     return ValidationReport(
         passed=all(c.passed for c in checks),
@@ -195,6 +209,7 @@ def _checks(
     positive: int,
     trial_sharpes: Sequence[float],
     benchmark: list[Bar] | None,
+    free_parameters: int,
 ) -> list[Check]:
     curve = [1.0]
     for r in oos.returns:
@@ -243,9 +258,9 @@ def _checks(
         Check(
             "parameters",
             "Fria parametrar",
-            FREE_PARAMETERS,
+            free_parameters,
             f"<= {rules.max_free_parameters}",
-            rules.max_free_parameters >= FREE_PARAMETERS,
+            rules.max_free_parameters >= free_parameters,
         ),
         Check(
             "holdout",
@@ -258,7 +273,7 @@ def _checks(
     ]
 
 
-def report_sv(name: str, report: ValidationReport) -> str:
+def report_sv(name: str, report: ValidationReport[Any]) -> str:
     """A short, honest report in Swedish (§6.5)."""
     lines = [f"# Validering: {name}", ""]
     verdict = "klarade alla krav" if report.passed else "klarade INTE kraven och handlas inte"

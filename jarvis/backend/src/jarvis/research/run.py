@@ -44,7 +44,7 @@ async def run_validation(
     rules: Validation,
     clock: Callable[[], datetime],
     grid: Sequence[TrendParameters] = GRID,
-) -> tuple[ValidationReport, str]:
+) -> tuple[ValidationReport[TrendParameters], str]:
     today: date = clock().date()
     series: dict[str, list[Bar]] = {}
     for symbol in symbols:

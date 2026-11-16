@@ -11,9 +11,7 @@ import math
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from jarvis.strategy.bars import Bar
-
-SeriesFn = Callable[[list[Bar]], Sequence[Any]]
+SeriesFn = Callable[[list[Any]], Sequence[Any]]
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -24,7 +22,7 @@ def _same(a: Any, b: Any) -> bool:
     return bool(a == b)
 
 
-def find_lookahead(series: SeriesFn, bars: list[Bar], days: Iterable[int]) -> list[int]:
+def find_lookahead(series: SeriesFn, bars: list[Any], days: Iterable[int]) -> list[int]:
     """The days whose value changes when the future is removed (empty means clean)."""
     full = series(bars)
     return [i for i in days if not _same(series(bars[: i + 1])[i], full[i])]

@@ -4,6 +4,13 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D25. Daytrading först, krypto senare
+Adam: "Kör utan krypto till en början." Krypto i ISK kräver kryptofonder på nordiska börser,
+och gratisdatan där är fördröjd; Jarvis handlar inte på fördröjda kurser. Daytrading byggs
+med utbrott efter öppningen på amerikanska aktier (gratis realtidsdata). Strategin har två
+fria parametrar och samma valideringskrav som allt annat; klarar den inte kraven efter
+kostnader stängs daytrading av (§6.2.1).
+
 ### D24. Risknivåer
 Tre nivåer (§9.2): **Försiktig** (0,5 % risk per affär, position max 7,5 %),
 **Balanserad** (specens standard: 0,75 % och 10 %) och **Offensiv** (1,5 % och 20 %, och

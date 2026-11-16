@@ -134,7 +134,12 @@ Sharpe, Monte Carlo och lookahead-test.
 **Acceptanskrav:** En känd enkel strategi ger samma resultat i båda backtestrarna (inom
 tolerans), och lookahead-testet fångar ett avsiktligt inplanterat fel.
 
-### ⬜ Fas 3 – Strategibibliotek och regimer
+### 🔨 Fas 3 – Strategibibliotek och regimer
+
+- [x] Daytrading del 1: utbrott efter öppningen (ORB) på 5-minutersdata, backtest med stängning före börsens slut, paus efter 3 förluster i rad, lookahead-test, validering (samma krav som allt annat)
+- [ ] Daytrading del 2: stänga alla daytrades före stängning (order som säljer), körslinga under dagen, minutdata från IBKR
+- [ ] Krypto (väntar enligt Adam, D25)
+
 Alla strategier i §6.1, regimklassificering och livscykel.
 **Acceptanskrav:** Rapport på svenska över vilka kandidater som klarar valideringen. Det är
 helt okej om ingen klarar den. Då säger rapporten det ärligt och Jarvis handlar inte.
