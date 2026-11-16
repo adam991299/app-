@@ -245,6 +245,11 @@ class RiskEngine:
         cash_after = ctx.account.cash - exp.pending_buys - exp.order_value - order.estimated_cost
         if cash_after < equity * fraction(portfolio.min_cash_reserve_pct):
             reasons.append(Reason.CASH_RESERVE)
+        spendable = ctx.account.spendable
+        if spendable < ctx.account.cash and (
+            spendable - exp.pending_buys - exp.order_value - order.estimated_cost < 0
+        ):
+            reasons.append(Reason.UNSETTLED_CASH)  # enough cash, but not yet settled
 
         if exp.open_symbols > risk.concurrency.max_open_positions:
             reasons.append(Reason.MAX_OPEN_POSITIONS)

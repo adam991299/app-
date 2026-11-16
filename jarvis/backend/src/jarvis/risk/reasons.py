@@ -41,6 +41,7 @@ class Reason(StrEnum):
     COMMODITIES_LIMIT = "commodities_limit"
     GROSS_EXPOSURE_LIMIT = "gross_exposure_limit"
     CASH_RESERVE = "cash_reserve"
+    UNSETTLED_CASH = "unsettled_cash"
     MAX_OPEN_POSITIONS = "max_open_positions"
     # Economics
     MISSING_EDGE = "missing_edge"
@@ -89,6 +90,7 @@ MESSAGES_SV: dict[Reason, str] = {
     Reason.COMMODITIES_LIMIT: "Råvaror skulle få för stor andel av kapitalet.",
     Reason.GROSS_EXPOSURE_LIMIT: "Den totala exponeringen skulle överstiga kapitalet.",
     Reason.CASH_RESERVE: "Kassareserven skulle bli för liten.",
+    Reason.UNSETTLED_CASH: "Pengarna från dagens försäljningar är inte likvida än.",
     Reason.MAX_OPEN_POSITIONS: "Det finns redan max antal öppna positioner.",
     Reason.MISSING_EDGE: "Affären saknar beräknad förväntad vinst.",
     Reason.EDGE_TOO_SMALL: "Förväntad vinst är för liten jämfört med kostnaderna.",

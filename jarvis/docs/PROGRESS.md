@@ -2,6 +2,14 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Köp bara för likvida pengar (A6)
+
+- `Account.settled_cash` (IBKR:s `SettledCash`) och `spendable`. Risk-motorn avvisar ett köp
+  som bara går att betala med pengar från försäljningar som inte är likvida än
+  (`UNSETTLED_CASH`), och storleken räknas på de likvida pengarna.
+- `SimBroker(settlement_days=1)` beter sig som ett kontantkonto med T+1.
+- 549 tester gröna, 100 % i risk, mäklare, order, ekonomi och domän.
+
 ## 2026-11-16 — Fler daytrades per dag (D26)
 
 - 50 aktier i stället för 20 (`config/universe_us.yaml`).

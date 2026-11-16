@@ -423,3 +423,10 @@ def test_sizing_is_exactly_the_largest_approved_quantity(
             buy(inst, sized.quantity, str(entry), str(stop), edge="1e9", cost="1"), ctx
         )
         assert exact.approved, exact.reasons
+
+
+def test_unsettled_sale_proceeds_cannot_pay_for_a_buy() -> None:
+    order = buy(quantity=50, stop="99.9")  # about 5 000
+    assert reasons(order, cash="60000", settled_cash="4000") == (Reason.UNSETTLED_CASH,)
+    assert reasons(order, cash="60000", settled_cash="60000") == ()
+    assert reasons(order, cash="60000", settled_cash="90000") == ()  # never above cash

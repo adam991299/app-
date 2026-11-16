@@ -71,6 +71,7 @@ def context(
     *,
     equity: str = "100000",
     cash: str | None = None,
+    settled_cash: str | None = None,
     positions: Mapping[str, Position] | None = None,
     pending: Sequence[PendingOrder] = (),
     protected: Mapping[str, int] | None = None,
@@ -83,7 +84,11 @@ def context(
 ) -> RiskContext:
     return RiskContext(
         now=now,
-        account=Account(Decimal(equity), Decimal(cash if cash is not None else equity)),
+        account=Account(
+            Decimal(equity),
+            Decimal(cash if cash is not None else equity),
+            None if settled_cash is None else Decimal(settled_cash),
+        ),
         positions=positions or {},
         pending=pending,
         protected=protected or {},

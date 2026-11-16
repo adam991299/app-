@@ -241,6 +241,20 @@ async def test_account_in_base_currency() -> None:
     )
     account = await broker.account()
     assert (account.net_liquidation, account.cash) == (D("100482.35"), D("81250.1"))
+    assert account.settled_cash is None
+    assert account.spendable == D("81250.1")
+
+
+async def test_settled_cash_is_read_when_reported() -> None:
+    _, broker = setup(
+        values=[
+            AccountValue("DU123", "NetLiquidation", "50000", "SEK", ""),
+            AccountValue("DU123", "TotalCashValue", "30000", "SEK", ""),
+            AccountValue("DU123", "SettledCash", "12000", "SEK", ""),
+        ]
+    )
+    account = await broker.account()
+    assert (account.settled_cash, account.spendable) == (D(12000), D(12000))
 
 
 async def test_incomplete_account_summary_is_refused() -> None:

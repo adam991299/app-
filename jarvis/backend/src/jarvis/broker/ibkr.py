@@ -186,11 +186,16 @@ class IbkrBroker:
             if value.currency == self._s.base_currency and value.tag in (
                 "NetLiquidation",
                 "TotalCashValue",
+                "SettledCash",
             ):
                 found[value.tag] = Decimal(value.value)
-        if len(found) != 2:
+        if "NetLiquidation" not in found or "TotalCashValue" not in found:
             raise BrokerError("account summary is missing NetLiquidation or TotalCashValue")
-        return Account(net_liquidation=found["NetLiquidation"], cash=found["TotalCashValue"])
+        return Account(
+            net_liquidation=found["NetLiquidation"],
+            cash=found["TotalCashValue"],
+            settled_cash=found.get("SettledCash"),
+        )
 
     async def positions(self) -> tuple[BrokerPosition, ...]:
         self._guard()

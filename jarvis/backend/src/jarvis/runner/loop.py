@@ -253,7 +253,7 @@ class Runner:
         sized = size_position(
             instrument=instrument,
             equity=account.net_liquidation,
-            free_cash=account.cash - reserve,
+            free_cash=min(account.cash - reserve, account.spendable),
             entry=limit,
             stop=stop,
             fx_to_base=quote.fx_to_base,

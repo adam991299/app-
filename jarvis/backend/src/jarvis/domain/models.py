@@ -83,7 +83,17 @@ class Position:
 
 @dataclass(frozen=True, slots=True)
 class Account:
-    """Account totals in base currency, as reported by the broker."""
+    """Account totals in base currency, as reported by the broker.
+
+    ``settled_cash`` is the part of the cash that may pay for new buys in a cash account:
+    money from a sale is usable only once the sale has settled (T+1 for US stocks). None
+    means the broker reported no separate figure."""
 
     net_liquidation: Decimal
     cash: Decimal
+    settled_cash: Decimal | None = None
+
+    @property
+    def spendable(self) -> Decimal:
+        """Cash that new buys may use: the settled part when it is known."""
+        return self.cash if self.settled_cash is None else min(self.cash, self.settled_cash)

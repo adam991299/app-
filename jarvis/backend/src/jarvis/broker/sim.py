@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from jarvis.broker.models import (
@@ -52,8 +52,13 @@ class SimBroker:
         commission_per_share: Decimal = Decimal("0.005"),
         minimum_commission: Decimal = Decimal("1"),
         max_fill_per_price: int | None = None,
+        settlement_days: int = 0,
     ) -> None:
+        """``settlement_days`` > 0 makes it a cash account in which money from a sale can be
+        spent on buys only after that many weekdays (exchange holidays are ignored)."""
         self._cash = cash
+        self._settlement_days = settlement_days
+        self._unsettled: list[tuple[date, Decimal]] = []  # (settles on, amount)
         self._clock = clock
         self._per_share = commission_per_share
         self._minimum = minimum_commission
@@ -105,7 +110,20 @@ class SimBroker:
             (qty * self._prices.get(sym, cost) for sym, (qty, cost) in self._positions.items()),
             Decimal(0),
         )
-        return Account(net_liquidation=self._cash + value, cash=self._cash)
+        settled = self._settled_cash() if self._settlement_days else None
+        return Account(net_liquidation=self._cash + value, cash=self._cash, settled_cash=settled)
+
+    def _settled_cash(self) -> Decimal:
+        today = self._clock().date()
+        self._unsettled = [(day, amount) for day, amount in self._unsettled if day > today]
+        return self._cash - sum((amount for _, amount in self._unsettled), Decimal(0))
+
+    def _settles_on(self, day: date) -> date:
+        left = self._settlement_days
+        while left:
+            day += timedelta(days=1)
+            left -= day.weekday() < 5
+        return day
 
     async def positions(self) -> tuple[BrokerPosition, ...]:
         self._guard()
@@ -211,6 +229,8 @@ class SimBroker:
             needed = request.quantity * request.limit_price + self._commission(request.quantity)
             if needed > self._cash - reserved:
                 return "insufficient cash (cash account, no margin)"
+            if self._settlement_days and needed > self._settled_cash() - reserved:
+                return "insufficient settled cash (sale proceeds have not settled)"
             return None
         held = self._positions.get(symbol, (0, Decimal(0)))[0]
         if request.quantity > held - self._working_sell_quantity(symbol):
@@ -309,6 +329,9 @@ class SimBroker:
             self._positions[symbol] = (new_qty, (held * avg + quantity * price) / new_qty)
         else:
             self._cash += quantity * price - commission
+            if self._settlement_days:
+                settles = self._settles_on(self._clock().date())
+                self._unsettled.append((settles, quantity * price - commission))
             if held - quantity:
                 self._positions[symbol] = (held - quantity, avg)
             else:

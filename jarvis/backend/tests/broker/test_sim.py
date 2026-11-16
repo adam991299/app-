@@ -513,3 +513,29 @@ def test_finished_stop_cannot_be_moved() -> None:
     sim.set_price("AAPL", D(90))
     with pytest.raises(BrokerError, match="no longer working"):
         run(sim.modify_stop("o1.stop", D(80)))
+
+
+def test_cash_account_proceeds_settle_after_the_next_weekday() -> None:
+    now = [NOW + timedelta(days=4)]  # Friday
+    sim = SimBroker(cash=D(1500), clock=lambda: now[0], minimum_commission=D(1), settlement_days=1)
+    run(sim.connect())
+    sim.set_price("AAPL", D(100))
+    run(sim.submit(bracket("o1", qty=10, limit="100", stop="95")))
+    run(sim.cancel("o1.stop"))
+    run(sim.submit(exit_order("x1", qty=10, limit="100")))
+    account = run(sim.account())
+    assert account.cash == D(1498)  # 1 500 - 1 000 - 1 + 1 000 - 1
+    assert account.settled_cash == D(499)
+    order = run(sim.submit(bracket("o2", qty=10, limit="100", stop="95")))
+    assert order.status is OrderStatus.REJECTED
+    now[0] += timedelta(days=1)  # Saturday: still unsettled
+    assert run(sim.account()).settled_cash == D(499)
+    now[0] += timedelta(days=2)  # Monday
+    assert run(sim.account()).settled_cash == D(1498)
+    assert run(sim.submit(bracket("o3", qty=10, limit="100", stop="95"))).status is (
+        OrderStatus.FILLED
+    )
+
+
+def test_without_settlement_the_account_reports_no_settled_figure() -> None:
+    assert run(broker().account()).settled_cash is None
