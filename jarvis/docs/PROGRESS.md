@@ -2,6 +2,17 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Största vinst efter kostnader oavsett kapital (D31)
+
+- `runner/selection.py`: en affär skickas bara om förväntat resultat är minst 2 gånger
+  kostnaderna; konkurrerande signaler tas i ordning efter förväntat resultat efter kostnader
+  i kronor (trendföljning och daytrading). Positionsstorleken räknas om innan varje order.
+- Daytrading slutar följa aktier där inte ens en aktie ryms i budgeten (färre anrop till
+  IBKR) och visar i appen hur många affärer som hoppades över för att avgifterna skulle äta
+  upp vinsten. Strategierna slås därmed i praktiken på och av efter kapitalet.
+- `economics.commission_plan` (fixed/tiered) styr kostnadsmodellen, även i valideringen.
+- 613 backend-tester gröna, 100 % i risk, mäklare, order och ekonomi.
+
 ## 2026-11-16 — Budget, paus/kill switch och riktig handel (D29)
 
 - Riskmotorn och storleksberäkningen följer Jarvis budget; daytradingens dagsgräns också.
