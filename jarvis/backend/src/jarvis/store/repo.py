@@ -226,6 +226,51 @@ class Store:
             peak_reset_at=at,
         )
 
+    async def budget_pct(self, now: datetime) -> Decimal:
+        """The share of the account Jarvis may manage right now, in percent (§7.1)."""
+        async with self._sessions() as session:
+            row = await session.get_one(Controls, 1)
+            if row.budget_from is not None and now < row.budget_from:
+                return Decimal(str(row.previous_budget_pct))
+            return Decimal(str(row.budget_pct))
+
+    async def pending_budget(self, now: datetime) -> tuple[Decimal, datetime] | None:
+        """A raise that has been chosen but does not apply yet."""
+        async with self._sessions() as session:
+            row = await session.get_one(Controls, 1)
+            if row.budget_from is not None and now < row.budget_from:
+                return Decimal(str(row.budget_pct)), row.budget_from
+            return None
+
+    async def set_budget(self, pct: Decimal, *, actor: str, at: datetime) -> datetime:
+        """Lowering applies at once. Raising applies from tomorrow, and more than doubling
+        waits at least 24 hours (§7.1). Returns when the new budget takes effect."""
+        if not Decimal(0) < pct <= Decimal(100):
+            raise ValueError("the budget is a share of the account, above 0 and at most 100 %")
+        current = await self.budget_pct(at)
+        effective = at
+        if pct > current:
+            effective = day_start(at) + timedelta(days=1)
+            if pct > current * 2:
+                effective = max(effective, at + timedelta(hours=24))
+        await self._change_controls(
+            at=at,
+            actor=actor,
+            action="budget",
+            details={"from": str(current), "to": str(pct), "effective": effective.isoformat()},
+            budget_pct=float(pct),
+            previous_budget_pct=float(current),
+            budget_from=effective if effective > at else None,
+        )
+        return effective
+
+    async def set_trading_mode(self, mode: str, *, actor: str, at: datetime) -> None:
+        if mode not in ("paper", "live"):
+            raise ValueError("unknown trading mode")
+        await self._change_controls(
+            at=at, actor=actor, action="trading_mode", details={"mode": mode}, trading_mode=mode
+        )
+
     async def set_risk_profile(self, profile: RiskProfile, *, actor: str, at: datetime) -> datetime:
         """A lower level applies at once; a higher one from the next trading day (§7.1).
         Returns when the new level takes effect."""

@@ -38,6 +38,7 @@ class Controls(Base):
     __table_args__ = (
         CheckConstraint("id = 1", name="single_row"),
         CheckConstraint("trading_mode IN ('paper', 'live')", name="known_mode"),
+        CheckConstraint("budget_pct > 0 AND budget_pct <= 100", name="budget_range"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -49,6 +50,9 @@ class Controls(Base):
     risk_profile: Mapped[str] = mapped_column(String(16), server_default="balanced")
     previous_risk_profile: Mapped[str] = mapped_column(String(16), server_default="balanced")
     risk_profile_from: Mapped[datetime | None] = mapped_column(UTC_TIME)
+    budget_pct: Mapped[float] = mapped_column(Float, server_default="100")
+    previous_budget_pct: Mapped[float] = mapped_column(Float, server_default="100")
+    budget_from: Mapped[datetime | None] = mapped_column(UTC_TIME)
     updated_at: Mapped[datetime] = mapped_column(UTC_TIME)
 
 

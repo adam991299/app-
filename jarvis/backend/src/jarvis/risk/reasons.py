@@ -14,6 +14,7 @@ class Reason(StrEnum):
     BROKER_ERRORS = "broker_errors"
     CLOCK_DRIFT = "clock_drift"
     NOT_RECONCILED = "not_reconciled"
+    ACCOUNT_MODE_MISMATCH = "account_mode_mismatch"
     # Order validity
     INVALID_QUANTITY = "invalid_quantity"
     INVALID_PRICE = "invalid_price"
@@ -62,6 +63,10 @@ MESSAGES_SV: dict[Reason, str] = {
     Reason.BROKER_ERRORS: "För många fel i rad mot mäklaren.",
     Reason.CLOCK_DRIFT: "Serverns klocka avviker för mycket.",
     Reason.NOT_RECONCILED: "Positionerna stämmer inte mot mäklaren.",
+    Reason.ACCOUNT_MODE_MISMATCH: (
+        "Vald handelsform (papper eller riktig) stämmer inte med kontot som gatewayn är "
+        "inloggad på."
+    ),
     Reason.INVALID_QUANTITY: "Ordern har ett ogiltigt antal.",
     Reason.INVALID_PRICE: "Ordern har ett ogiltigt pris.",
     Reason.MISSING_STOP: "Ordern saknar stop-loss.",

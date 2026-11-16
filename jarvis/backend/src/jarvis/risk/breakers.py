@@ -68,6 +68,7 @@ class SystemHealth:
     consecutive_broker_errors: int
     clock_drift_seconds: float
     positions_reconciled: bool
+    account_mode_matches: bool = True  # paper/live chosen by Adam = the account logged in
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +102,8 @@ def evaluate(
         halted.append(Reason.CLOCK_DRIFT)
     if not health.positions_reconciled:
         halted.append(Reason.NOT_RECONCILED)
+    if not health.account_mode_matches:
+        halted.append(Reason.ACCOUNT_MODE_MISMATCH)
 
     drawdown_hit = _loss_fraction(marks.peak, marks.current) >= fraction(
         limits.kill_switch_drawdown_pct
