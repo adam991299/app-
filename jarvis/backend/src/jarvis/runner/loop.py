@@ -27,6 +27,7 @@ from jarvis.markets.calendar import CalendarRangeError, Exchange, session_at
 from jarvis.research.costs import CostModel
 from jarvis.risk.profiles import apply_profile
 from jarvis.risk.sizing import size_position
+from jarvis.runner.daytrade import DayTrader
 from jarvis.store.repo import Store
 from jarvis.strategy.bars import Bar
 from jarvis.strategy.trend import (
@@ -81,6 +82,7 @@ class Runner:
         before_tick: Callable[[], Awaitable[None]] | None = None,
         risk: Risk | None = None,
         costs: CostModel | None = None,
+        day_trader: DayTrader | None = None,
     ) -> None:
         self._broker = broker
         self._engine = engine
@@ -97,6 +99,7 @@ class Runner:
         self._before_tick = before_tick
         self._risk = risk or Risk()
         self._costs = costs or CostModel()
+        self._day_trader = day_trader
         self.pending: list[Pending] = []
         self.last_close_processed: date | None = None
 
@@ -150,6 +153,8 @@ class Runner:
         now = self._clock()
         if self.pending and self._entry_window_open(now):
             await self.enter_pending()
+        if self._day_trader is not None:
+            await self._day_trader.tick()
         day = self._close_due(now)
         if day is not None:
             await self.after_close(day)
@@ -183,8 +188,8 @@ class Runner:
 
     async def _update_stops(self, bars: dict[str, list[Bar]], params: TrendParameters) -> None:
         for order in await self._store.open_orders():
-            if order.kind != "stop" or order.parent_id is None:
-                continue
+            if order.kind != "stop" or order.parent_id is None or order.strategy != NAME:
+                continue  # day trades keep their opening-range stop
             if order.status not in (OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED):
                 continue
             history = bars.get(order.symbol, [])

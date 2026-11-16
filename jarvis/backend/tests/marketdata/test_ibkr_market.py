@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+import pytest
 from ib_async import BarData, Contract, ContractDetails, Ticker
 
 from jarvis.marketdata.ibkr import IbkrMarket
@@ -22,6 +23,8 @@ class FakeMarket:
     details: list[ContractDetails] = field(default_factory=list)
     fail: bool = False
     hang: bool = False
+    chunks: list[list[BarData]] = field(default_factory=list)
+    requests: list[tuple[str, str, str]] = field(default_factory=list)
 
     async def reqTickersAsync(self, *contracts: Contract) -> list[Ticker]:
         if self.fail:
@@ -41,9 +44,13 @@ class FakeMarket:
         barSizeSetting: str,
         whatToShow: str,
         useRTH: bool,
+        formatDate: int = 1,
     ) -> list[BarData]:
         if self.fail:
             raise ConnectionError("down")
+        self.requests.append((endDateTime, durationStr, barSizeSetting))
+        if self.chunks:
+            return self.chunks.pop(0)
         return self.bars
 
     async def reqContractDetailsAsync(self, contract: Contract) -> list[ContractDetails]:
@@ -127,3 +134,42 @@ async def test_instrument_uses_ibkr_industry_as_sector() -> None:
     assert await market(FakeMarket(details=[ContractDetails(industry="")])).instrument("X") is None
     assert await market(FakeMarket()).instrument("X") is None
     assert await market(FakeMarket(fail=True)).instrument("X") is None
+
+
+def five_minutes(start: datetime, count: int) -> list[BarData]:
+    return [
+        BarData(start + i * timedelta(minutes=5), 100.0, 101.0, 99.0, 100.5, 1000)
+        for i in range(count)
+    ]
+
+
+async def test_intraday_bars_keep_only_finished_bars_in_utc() -> None:
+    opens = datetime(2026, 11, 16, 14, 30, tzinfo=UTC)
+    fake = FakeMarket(bars=five_minutes(opens, 19))  # the 19th bar (16:00) is still running
+    bars = await market(fake).intraday_bars(instrument(), now=NOW)
+    assert len(bars) == 18
+    assert bars[-1].at == datetime(2026, 11, 16, 15, 55, tzinfo=UTC)
+    assert fake.requests == [("", "1 D", "5 mins")]
+
+
+async def test_intraday_history_is_fetched_a_month_at_a_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pauses: list[float] = []
+
+    async def no_wait(seconds: float) -> None:
+        pauses.append(seconds)
+
+    monkeypatch.setattr("jarvis.marketdata.ibkr.asyncio.sleep", no_wait)
+    recent = five_minutes(datetime(2026, 11, 16, 14, 30, tzinfo=UTC), 3)
+    older = five_minutes(datetime(2026, 10, 16, 14, 30, tzinfo=UTC), 2) + recent[:1]
+    fake = FakeMarket(chunks=[recent, older, []])
+    bars = await market(fake).intraday_bars(instrument(), now=NOW, days=45)
+    assert len(bars) == 5  # the shared boundary bar is kept once
+    assert [r[1] for r in fake.requests] == ["20 D", "20 D", "5 D"]
+    assert fake.requests[1][0] == "20261116-14:30:00"
+    assert pauses == [11.0, 11.0]
+
+
+async def test_intraday_bars_fail_closed() -> None:
+    assert await market(FakeMarket(fail=True)).intraday_bars(instrument(), now=NOW) == []

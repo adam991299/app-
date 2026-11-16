@@ -482,6 +482,35 @@ class Store:
             )
             return int(count or 0)
 
+    async def closed_results(self, strategy: str, since: datetime) -> list[Decimal]:
+        """Profit or loss (after commission) of each of the strategy's entries that has
+        been fully sold, oldest first. Entries are matched to their stop, target and exit
+        orders by id (``<entry>.stop``, ``<entry>.tp``, ``<entry>.exitN``)."""
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(FillRow, OrderRow)
+                    .join(OrderRow, OrderRow.client_order_id == FillRow.client_order_id)
+                    .where(OrderRow.strategy == strategy, FillRow.at >= since)
+                    .order_by(FillRow.at, FillRow.fill_id)
+                )
+            ).all()
+        trades: dict[str, list[Decimal]] = {}  # entry id -> [bought, sold, cash]
+        last_fill: dict[str, datetime] = {}
+        for fill, order in rows:
+            entry = order.parent_id or order.client_order_id.split(".exit")[0]
+            state = trades.setdefault(entry, [Decimal(0), Decimal(0), Decimal(0)])
+            value = fill.quantity * fill.price
+            if fill.side == "buy":
+                state[0] += fill.quantity
+                state[2] -= value + fill.commission
+            else:
+                state[1] += fill.quantity
+                state[2] += value - fill.commission
+            last_fill[entry] = fill.at
+        closed = [e for e, (bought, sold, _) in trades.items() if bought and bought == sold]
+        return [trades[e][2] for e in sorted(closed, key=lambda e: last_fill[e])]
+
     async def entry_strategies(self) -> dict[str, str]:
         """The strategy of the most recent entry per symbol (who owns the position)."""
         async with self._sessions() as session:

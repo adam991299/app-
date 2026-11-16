@@ -95,5 +95,23 @@ def setup_for(
     return None
 
 
+def params_dict(params: OrbParameters) -> dict[str, object]:
+    return {
+        "range_minutes": str(params.range_minutes),
+        "target_r": str(params.target_r),
+        "last_entry_minutes": str(params.last_entry_minutes),
+        "flat_minutes": str(params.flat_minutes),
+    }
+
+
+def params_from(data: dict[str, object]) -> OrbParameters:
+    return OrbParameters(
+        range_minutes=int(str(data["range_minutes"])),
+        target_r=Decimal(str(data["target_r"])),
+        last_entry_minutes=int(str(data["last_entry_minutes"])),
+        flat_minutes=int(str(data["flat_minutes"])),
+    )
+
+
 def flat_time(close: datetime, params: OrbParameters) -> datetime:
     return close - timedelta(minutes=params.flat_minutes)

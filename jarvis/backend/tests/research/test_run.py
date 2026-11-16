@@ -4,12 +4,13 @@ from datetime import UTC, date, datetime
 
 from jarvis.config.settings import Validation
 from jarvis.domain import Instrument
-from jarvis.research.run import BENCHMARK, run_validation
+from jarvis.research.run import BENCHMARK, run_orb_validation, run_validation
 from jarvis.store.repo import Store
 from jarvis.strategy.bars import Bar
+from jarvis.strategy.orb import IntradayBar, OrbParameters
 from jarvis.strategy.trend import TrendParameters, params_dict, params_from
 from tests.factories import instrument
-from tests.research.data import random_walk
+from tests.research.data import orb_days, random_walk
 
 NOW = datetime(2026, 11, 16, 22, tzinfo=UTC)
 GRID = [TrendParameters(entry_lookback=20, exit_lookback=10, atr_period=14)]
@@ -63,3 +64,28 @@ async def test_without_index_data_the_run_cannot_approve(store: Store) -> None:
         grid=GRID,
     )
     assert not report.passed
+
+
+class IntradayMarket(Market):
+    async def intraday_bars(
+        self, inst: Instrument, *, now: datetime, days: int = 1
+    ) -> list[IntradayBar]:
+        return orb_days(hash(inst.symbol) % 1000, days=40)
+
+
+async def test_orb_run_records_its_own_trials_and_verdict(store: Store) -> None:
+    report, text = await run_orb_validation(
+        market=IntradayMarket(),
+        store=store,
+        symbols=["AAA", "GONE"],
+        rules=Validation(),
+        clock=lambda: NOW,
+        grid=[OrbParameters()],
+        days=40,
+    )
+    assert "Data: 1 aktier, 40 handelsdagar" in text
+    saved = await store.latest_validation("orb")
+    assert saved is not None
+    assert saved[0] == report.passed
+    assert len(await store.trial_sharpes("orb")) == sum(t.sample == "in" for t in report.trials)
+    assert await store.latest_validation("trend") is None

@@ -24,6 +24,7 @@ from jarvis.marketdata.ibkr import IbkrMarket
 from jarvis.markets.calendar import Exchange, session_at
 from jarvis.notify.email import EmailAlerts, FanOut, smtp_settings_from_env
 from jarvis.runner.clock import ClockMonitor, ntp_measure
+from jarvis.runner.daytrade import DayTrader
 from jarvis.runner.loop import Runner
 from jarvis.service.app import create_app
 from jarvis.service.names import ServiceName
@@ -95,8 +96,9 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
         market = IbkrMarket(ib, clock)
         monitor = ClockMonitor(ntp_measure())
         instruments: dict[str, Instrument] = {}
+        broker = IbkrBroker(ib, ibkr)
         engine = ExecutionEngine(
-            broker=IbkrBroker(ib, ibkr),
+            broker=broker,
             store=store,
             risk=settings.risk,
             instruments=instruments,
@@ -107,7 +109,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             alerts=alerts,
         )
         runner = Runner(
-            broker=IbkrBroker(ib, ibkr),
+            broker=broker,
             engine=engine,
             market=market,
             store=store,
@@ -116,6 +118,15 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             clock=clock,
             before_tick=monitor.refresh,
             risk=settings.risk,
+            day_trader=DayTrader(
+                broker=broker,
+                engine=engine,
+                market=market,
+                store=store,
+                instruments=instruments,
+                clock=clock,
+                risk=settings.risk,
+            ),
         )
         stop = asyncio.Event()
         task = asyncio.create_task(runner.run(stop))

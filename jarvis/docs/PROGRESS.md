@@ -2,6 +2,25 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Daytrading (öppningsintervall, ORB) i körslingan
+
+**Gjort**
+- `runner/daytrade.py`: under USA-sessionen letar Jarvis efter utbrott över de första
+  minuternas högsta nivå (5-minutersdata från IBKR). Bara om ORB-strategins senaste
+  validering är godkänd. Högst 5 daytrades samtidigt, en per aktie och dag, stopp för dagen
+  vid 1 % förlust eller 3 förluster i rad, allt säljs 15 minuter före stängning med riktig
+  säljorder. Varje ny 5-minutersstapel hämtas en gång (IBKR:s gränser för historikanrop).
+  Trendstrategins stopphöjning rör inte daytrades.
+- `store.closed_results`: resultat efter avgifter för varje helt stängd affär per strategi.
+- `marketdata`: `intraday_bars` (en månad per anrop, paus mellan anropen).
+- `python -m jarvis.research.run orb`: validerar daytrading på ett års 5-minutersdata
+  (walk-forward, låst holdout, deflaterad Sharpe, jämförelse med index). Tar ungefär en timme.
+
+**Verifierat:** 542 tester gröna, 100 % täckning i risk, mäklare, order och ekonomi; mypy
+strict och ruff utan anmärkningar.
+
+**Nästa:** köra båda valideringarna på servern när den finns; Fas 6-vyer.
+
 ## 2026-11-15 — Fas 0.5 påbörjad, och "0 kr"-beslutet
 
 **Adams svar:** bor i Sverige (tidszon Europe/Stockholm, redan standard), har ett IBKR-konto,

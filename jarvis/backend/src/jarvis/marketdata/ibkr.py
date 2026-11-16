@@ -11,7 +11,7 @@ import asyncio
 import logging
 import math
 from collections.abc import Awaitable, Callable
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Protocol
 
@@ -19,9 +19,11 @@ from ib_async import Contract, Forex, Stock
 
 from jarvis.domain import AssetClass, Instrument, Quote
 from jarvis.strategy.bars import Bar
+from jarvis.strategy.orb import BAR, IntradayBar
 
 logger = logging.getLogger(__name__)
 LIVE = 1  # IBKR market data type: 1 live, 2 frozen, 3 delayed, 4 delayed frozen
+PACING_SECONDS = 11.0  # IBKR: at most 60 history requests per 10 minutes
 
 
 class MarketClient(Protocol):
@@ -38,6 +40,7 @@ class MarketClient(Protocol):
         barSizeSetting: str,  # noqa: N803
         whatToShow: str,  # noqa: N803
         useRTH: bool,  # noqa: N803
+        formatDate: int = 1,  # noqa: N803
     ) -> Awaitable[list[Any]]: ...
 
     def reqContractDetailsAsync(self, contract: Contract) -> Awaitable[list[Any]]: ...  # noqa: N802
@@ -121,6 +124,55 @@ class IbkrMarket:
                 )
             )
         return bars
+
+    async def intraday_bars(
+        self, instrument: Instrument, *, now: datetime, days: int = 1
+    ) -> list[IntradayBar]:
+        """Finished 5-minute bars of the regular session, in UTC. ``days`` > 1 is for
+        research; IBKR's pacing rules are respected by asking one month at a time."""
+        contract = Stock(instrument.symbol, "SMART", instrument.currency)
+        bars: list[IntradayBar] = []
+        end = ""
+        remaining = days
+        while remaining > 0:
+            chunk = min(remaining, 20)
+            try:
+                rows = await asyncio.wait_for(
+                    self._ib.reqHistoricalDataAsync(
+                        contract,
+                        endDateTime=end,
+                        durationStr=f"{chunk} D",
+                        barSizeSetting="5 mins",
+                        whatToShow="TRADES",
+                        useRTH=True,
+                        formatDate=2,  # UTC timestamps
+                    ),
+                    self._timeout * 6,
+                )
+            except Exception:
+                logger.exception("intraday request failed for %s", instrument.symbol)
+                return []
+            chunk_bars = [
+                IntradayBar(
+                    at=row.date.astimezone(UTC),
+                    open=Decimal(str(row.open)),
+                    high=Decimal(str(row.high)),
+                    low=Decimal(str(row.low)),
+                    close=Decimal(str(row.close)),
+                    volume=int(row.volume),
+                )
+                for row in rows
+                if row.date + BAR <= now
+            ]
+            if not chunk_bars:
+                break
+            bars = chunk_bars + bars
+            end = chunk_bars[0].at.strftime("%Y%m%d-%H:%M:%S")
+            remaining -= chunk
+            if remaining > 0:
+                await asyncio.sleep(PACING_SECONDS)
+        unique = {bar.at: bar for bar in bars}  # chunks may share their boundary bar
+        return [unique[at] for at in sorted(unique)]
 
     async def instrument(self, symbol: str, currency: str = "USD") -> Instrument | None:
         """Instrument with IBKR's industry as sector (needed for the sector limit)."""
