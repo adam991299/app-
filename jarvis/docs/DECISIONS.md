@@ -4,6 +4,10 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D30. Ingen "Kan jag leva på det?"-kalkylator i appen
+Adam: "Nummer 1 behövs inte. Inte en nödvändig funktion." Kalkylatorn (§1.5) byggs inte i
+appen. Modellen i `economics/living.py` finns kvar och är testad.
+
 ### D29. Jarvis budget, paus/kill switch och byte till riktig handel
 - **Budget (§7.1):** alla riskgränser och positionsstorlekar räknas mot den del av kontot
   Jarvis får förvalta. Sänkning gäller direkt; höjning från i morgon; mer än en
