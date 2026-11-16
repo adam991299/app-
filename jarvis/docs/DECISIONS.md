@@ -4,6 +4,19 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D32. Inget viloläge i indexfond
+Adam: "Att den ska sättas i en indexfond är onödigt. Då måste den sälja hela tiden. Inte
+nödvändigt." Pengar som ingen strategi använder ligger kvar som kontanter. §1.5 "Viloläge =
+index" byggs inte. Jämförelsen med indexfonden i ekonomivyn finns kvar (§0 regel 7).
+
+### D31. Grundprincip: största möjliga vinst efter kostnader, oavsett kontots storlek
+Adam: "syftet ska maximera vinst oavsett budget och storleken på kontot. Det är vital del
+av hela bygget." Allt som byggs ska anpassa sig efter kapitalet i stället för att kräva ett
+visst kapital: affärer rangordnas efter förväntad nettovinst i kronor efter alla kostnader,
+strategier och aktielista väljs efter vad som lönar sig vid nuvarande budget, och
+kostnadsmodellen följer Adams faktiska avgiftsmodell hos IBKR. Riskgränserna och
+kapitalskyddet (§0 regel 2, §7) gäller fortfarande och står över vinstmålet.
+
 ### D30. Ingen "Kan jag leva på det?"-kalkylator i appen
 Adam: "Nummer 1 behövs inte. Inte en nödvändig funktion." Kalkylatorn (§1.5) byggs inte i
 appen. Modellen i `economics/living.py` finns kvar och är testad.

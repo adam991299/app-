@@ -28,6 +28,10 @@ och variabelnamn på engelska.
 8. **Språkmodeller fattar aldrig köp- eller säljbeslut.** Claude tolkar text; beslut tas av
    testade regelbaserade/statistiska modeller och risk-engine.
 
+**Adams grundprincip (D31):** maximera vinsten efter alla kostnader oavsett kontots storlek.
+Varje del ska anpassa sig efter kapitalet (rangordning efter nettovinst i kronor, strategier
+och aktielista efter vad som lönar sig vid nuvarande budget). Riskgränserna står över detta.
+
 Koden ska gå att förstå för Adam: korta moduler, tydliga namn, och
 `docs/HUR_DET_FUNGERAR.md` på enkel svenska (signal → order).
 
