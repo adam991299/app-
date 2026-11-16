@@ -378,3 +378,87 @@ def test_config_from_env_and_action_binding() -> None:
     assert (config.origin, config.setup_code) == ("https://jarvis.tail.ts.net", "x")
     assert action_purpose("deposit", {"amount": "1"}) != action_purpose("deposit", {"amount": "10"})
     assert unb64(b64(b"ok")) == b"ok"
+
+
+async def run_action(
+    client: httpx.AsyncClient, key: Authenticator, action: str, path: str, payload: dict[str, str]
+) -> httpx.Response:
+    credential = await confirm(client, key, action, payload)
+    return await client.post(path, json={**payload, "credential": credential})
+
+
+async def test_pause_resume_and_kill_switch_need_a_passkey(
+    client: httpx.AsyncClient, store: Store
+) -> None:
+    key = Authenticator()
+    await register(client, key)
+    for command, check in (
+        ("pause", lambda c: c.paused),
+        ("resume", lambda c: not c.paused),
+        ("kill_switch", lambda c: c.kill_switch_engaged),
+        ("reset_kill_switch", lambda c: not c.kill_switch_engaged),
+    ):
+        done = await run_action(client, key, "control", "/actions/control", {"command": command})
+        assert done.status_code == 200, done.text
+        assert check(await store.controls())
+    state = (await client.get("/controls")).json()
+    assert state == {
+        "mode": "paper",
+        "paused": False,
+        "kill_switch_engaged": False,
+        "budget_pct": "100",
+        "pending_budget_pct": None,
+        "pending_budget_from": None,
+    }
+
+
+async def test_budget_changes_follow_the_rules(client: httpx.AsyncClient, clock: Clock) -> None:
+    key = Authenticator()
+    await register(client, key)
+    lowered = await run_action(client, key, "budget", "/actions/budget", {"pct": "10"})
+    assert lowered.json()["message_sv"] == "Jarvis budget är nu 10 % av kontot."
+    raised = await run_action(client, key, "budget", "/actions/budget", {"pct": "20"})
+    assert raised.json()["message_sv"].endswith("från i morgon.")
+    tripled = await run_action(client, key, "budget", "/actions/budget", {"pct": "30"})
+    assert tripled.json()["message_sv"].endswith("om 24 timmar.")
+    state = (await client.get("/controls")).json()
+    assert (state["budget_pct"], state["pending_budget_pct"]) == ("10", "30")
+    for wrong in ("0", "101", "12.5", "x", "Infinity"):
+        refused = await client.post("/actions/budget", json={"pct": wrong, "credential": {}})
+        assert refused.status_code == 422, wrong
+
+
+async def test_live_needs_the_phrase_and_a_passkey_and_paper_is_one_step_back(
+    client: httpx.AsyncClient, store: Store
+) -> None:
+    key = Authenticator()
+    await register(client, key)
+    wrong = {"mode": "live", "phrase": "jag förstår risken", "budget_pct": "10"}
+    refused = await client.post("/actions/trading-mode", json={**wrong, "credential": {}})
+    assert refused.status_code == 422
+    assert "JAG FÖRSTÅR RISKEN" in refused.json()["detail"]
+    live = {"mode": "live", "phrase": "JAG FÖRSTÅR RISKEN", "budget_pct": "10"}
+    done = await run_action(client, key, "trading_mode", "/actions/trading-mode", live)
+    assert done.status_code == 200, done.text
+    assert "högst 10 %" in done.json()["message_sv"]
+    controls = await store.controls()
+    assert controls.trading_mode == "live"
+    assert await store.budget_pct(NOW) == 10
+    again = {"mode": "live", "phrase": "JAG FÖRSTÅR RISKEN", "budget_pct": "25"}
+    await run_action(client, key, "trading_mode", "/actions/trading-mode", again)
+    assert await store.budget_pct(NOW) == 10  # going live never raises the budget
+    back = {"mode": "paper", "phrase": "", "budget_pct": "10"}
+    done = await run_action(client, key, "trading_mode", "/actions/trading-mode", back)
+    assert done.json()["message_sv"] == "Jarvis är tillbaka i pappershandel."
+    assert (await store.controls()).trading_mode == "paper"
+
+
+async def test_actions_without_login_are_refused(client: httpx.AsyncClient) -> None:
+    await register(client, Authenticator())
+    client.cookies.clear()
+    for path, body in (
+        ("/actions/control", {"command": "pause"}),
+        ("/actions/budget", {"pct": "10"}),
+        ("/actions/trading-mode", {"mode": "paper"}),
+    ):
+        assert (await client.post(path, json={**body, "credential": {}})).status_code == 401

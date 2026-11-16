@@ -22,7 +22,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -95,7 +95,7 @@ class CredentialIn(_Body):
 
 
 class ActionOptionsIn(_Body):
-    action: str = Field(pattern="^(deposit|risk_profile)$")
+    action: str = Field(pattern="^(deposit|risk_profile|control|budget|trading_mode)$")
     payload: dict[str, str]
 
 
@@ -106,6 +106,51 @@ class DepositIn(CredentialIn):
 
 class RiskProfileIn(CredentialIn):
     profile: RiskProfile
+
+
+class ControlIn(CredentialIn):
+    command: Literal["pause", "resume", "kill_switch", "reset_kill_switch"]
+
+
+class BudgetIn(CredentialIn):
+    pct: str = Field(max_length=8)
+
+
+class TradingModeIn(CredentialIn):
+    mode: Literal["paper", "live"]
+    phrase: str = Field(default="", max_length=64)
+    budget_pct: str = Field(default="10", max_length=8)
+
+
+LIVE_PHRASE = "JAG FÖRSTÅR RISKEN"
+CONTROL_SV = {
+    "pause": "Handeln är pausad. Öppna positioner skyddas av stoppordrarna hos mäklaren.",
+    "resume": "Handeln är igång igen.",
+    "kill_switch": (
+        "Kill switch är aktiverad. Inga nya affärer tas förrän du startar handeln igen. "
+        "Öppna positioner skyddas av stoppordrarna hos mäklaren."
+    ),
+    "reset_kill_switch": "Kill switch är avstängd och handeln kan börja igen.",
+}
+
+
+def _plain(value: Decimal) -> str:
+    """10.0 -> "10", 12.5 -> "12.5"."""
+    return format(value.normalize(), "f")
+
+
+def parse_budget(text: str) -> Decimal:
+    try:
+        pct = Decimal(text)
+    except InvalidOperation as error:
+        raise HTTPException(422, "Budgeten måste vara ett tal i procent.") from error
+    if (
+        not pct.is_finite()
+        or not Decimal(1) <= pct <= Decimal(100)
+        or pct != pct.quantize(Decimal(1))
+    ):
+        raise HTTPException(422, "Budgeten är en hel procentsats mellan 1 och 100.")
+    return pct
 
 
 def action_purpose(action: str, payload: Mapping[str, str]) -> str:
@@ -317,6 +362,66 @@ def create_auth_router(
             return {"message_sv": f"Risknivån är nu {name}."}
         return {
             "message_sv": f"Risknivån blir {name} från i morgon. En höjning väntar alltid en dag."
+        }
+
+    @router.get("/controls")
+    async def controls() -> dict[str, Any]:
+        now = clock()
+        state = await store.controls()
+        pending = await store.pending_budget(now)
+        return {
+            "mode": state.trading_mode,
+            "paused": state.paused,
+            "kill_switch_engaged": state.kill_switch_engaged,
+            "budget_pct": _plain(await store.budget_pct(now)),
+            "pending_budget_pct": None if pending is None else _plain(pending[0]),
+            "pending_budget_from": None if pending is None else pending[1].isoformat(),
+        }
+
+    @router.post("/actions/control", dependencies=[Depends(guard), Depends(require_login)])
+    async def control(body: ControlIn) -> dict[str, str]:
+        await confirm(body.credential, action_purpose("control", {"command": body.command}))
+        now = clock()
+        if body.command in ("pause", "resume"):
+            await store.set_paused(body.command == "pause", actor="adam", at=now)
+        elif body.command == "kill_switch":
+            await store.engage_kill_switch("adam", actor="adam", at=now)
+        else:
+            await store.reset_kill_switch(actor="adam", at=now)
+        return {"message_sv": CONTROL_SV[body.command]}
+
+    @router.post("/actions/budget", dependencies=[Depends(guard), Depends(require_login)])
+    async def budget(body: BudgetIn) -> dict[str, str]:
+        pct = parse_budget(body.pct)
+        await confirm(body.credential, action_purpose("budget", {"pct": body.pct}))
+        now = clock()
+        effective = await store.set_budget(pct, actor="adam", at=now)
+        if effective <= now:
+            return {"message_sv": f"Jarvis budget är nu {pct} % av kontot."}
+        when = "om 24 timmar" if effective - now >= timedelta(hours=24) else "från i morgon"
+        return {"message_sv": f"Jarvis budget blir {pct} % av kontot {when}."}
+
+    @router.post("/actions/trading-mode", dependencies=[Depends(guard), Depends(require_login)])
+    async def trading_mode(body: TradingModeIn) -> dict[str, str]:
+        payload = {"mode": body.mode, "phrase": body.phrase, "budget_pct": body.budget_pct}
+        if body.mode == "paper":
+            await confirm(body.credential, action_purpose("trading_mode", payload))
+            await store.set_trading_mode("paper", actor="adam", at=clock())
+            return {"message_sv": "Jarvis är tillbaka i pappershandel."}
+        if body.phrase != LIVE_PHRASE:
+            raise HTTPException(422, f"Skriv exakt {LIVE_PHRASE} för att slå på riktig handel.")
+        pct = parse_budget(body.budget_pct)
+        await confirm(body.credential, action_purpose("trading_mode", payload))
+        now = clock()
+        if pct < await store.budget_pct(now):
+            await store.set_budget(pct, actor="adam", at=now)
+        await store.set_trading_mode("live", actor="adam", at=now)
+        return {
+            "message_sv": (
+                f"Riktig handel är vald med en budget på högst {pct} % av kontot. Jarvis handlar "
+                "först när gatewayn är inloggad på ditt riktiga konto; tills dess står handeln "
+                "still."
+            )
         }
 
     return router
