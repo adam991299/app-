@@ -642,3 +642,38 @@ code {
   min-height: 44px;
   line-height: 44px;
 }
+
+/* Controls */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.button.danger {
+  color: var(--color-text);
+  background: var(--color-loss);
+}
+
+.big-value {
+  font: var(--text-title);
+  margin-top: var(--space-1);
+}
+
+.slider {
+  width: 100%;
+  margin-top: var(--space-2);
+  accent-color: var(--color-glow-from);
+  min-height: 44px;
+}
+
+.steps {
+  display: flex;
+  justify-content: space-between;
+  font: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+
+.button-row + .caption {
+  margin-top: var(--space-1);
+}

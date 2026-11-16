@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
+import { BudgetControl, LiveTrading, TradingControls } from "@/components/Controls";
 import { api } from "@/lib/api";
 import {
   ActionError,
@@ -250,10 +251,13 @@ export function Settings() {
     body = (
       <div className="columns">
         <div className="column">
+          <TradingControls />
+          <BudgetControl riskLevel={today.data?.risk_level_sv} />
           <CashFlow />
         </div>
         <div className="column">
           <RiskLevel current={today.data?.risk_level_sv} />
+          <LiveTrading riskLevel={today.data?.risk_level_sv} />
           <button
             className="button quiet"
             type="button"

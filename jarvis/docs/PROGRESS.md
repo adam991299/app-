@@ -2,6 +2,19 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Budget, paus/kill switch och riktig handel (D29)
+
+- Riskmotorn och storleksberäkningen följer Jarvis budget; daytradingens dagsgräns också.
+- Handeln stoppas om papper/riktig i appen inte stämmer med gatewayns konto.
+- API: `/actions/control`, `/actions/budget`, `/actions/trading-mode`, `GET /controls`.
+- Inställningar: Handeln (paus, kill switch, starta igen), Jarvis budget (reglage som
+  snäpper vid 10/25/50/75/100 % med kronor), Riktig handel (förklaring, pappersresultat mot
+  indexfonden, frasen, startbudget).
+- 603 backend-tester gröna, 100 % i risk, mäklare, order och ekonomi; Playwright med
+  virtuell passkey; skärmdumpar `settings-*`.
+- Kvar: stresstester i budgetförhandsvisningen, gatewayn mot det riktiga kontot (D29),
+  "Jarvis före kostnader", "Kan jag leva på det?" i appen, notiser, chatten, nyhetsmotorn.
+
 ## 2026-11-16 — Passkey-inloggning och skyddade åtgärder (D28)
 
 - WebAuthn med py_webauthn 3.0.1 och @simplewebauthn/browser 14.0.0. Första passkeyn kräver

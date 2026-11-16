@@ -117,6 +117,7 @@ for (const [name, size] of Object.entries(SIZES)) {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true },
   });
   let registered = false;
+  let controls = { mode: "paper", paused: false, kill_switch_engaged: false, budget_pct: "100", pending_budget_pct: null, pending_budget_from: null };
   let loggedIn = false;
   const sent = {};
   const challenge = "dGVzdC1jaGFsbGVuZ2UtMzItYnl0ZXMtbG9uZy0xMjM0";
@@ -128,6 +129,11 @@ for (const [name, size] of Object.entries(SIZES)) {
     }
     if (path === "/api/auth/state") return route.fulfill({ json: { registered, logged_in: loggedIn } });
     if (path === "/api/today") return route.fulfill({ json: fx.today });
+    if (path === "/api/portfolio") return route.fulfill({ json: fx.portfolio });
+    if (path === "/api/economics") return route.fulfill({ json: fx.economics });
+    if (path === "/api/controls") return route.fulfill({ json: controls });
+    if (path === "/api/actions/control") { controls = { ...controls, paused: true }; return route.fulfill({ json: { message_sv: "Handeln är pausad. Öppna positioner skyddas av stoppordrarna hos mäklaren." } }); }
+    if (path === "/api/actions/trading-mode") { controls = { ...controls, mode: "live", budget_pct: "10" }; return route.fulfill({ json: { message_sv: "Riktig handel är vald med en budget på högst 10 % av kontot." } }); }
     if (path === "/api/auth/register/options") {
       if (request.postDataJSON().setup_code !== "kod-123") return route.fulfill({ status: 403, json: { detail: "Fel engångskod." } });
       return route.fulfill({ json: {
@@ -161,6 +167,23 @@ for (const [name, size] of Object.entries(SIZES)) {
   assert.deepEqual(sent["/api/actions/options"].body, { action: "deposit", payload: { amount: "12500.50", note: "" } });
   assert.equal(sent["/api/actions/deposit"].body.amount, "12500.50");
   assert.ok(sent["/api/actions/deposit"].body.credential.response.signature.length > 20);
+  // Pause, the budget preview and switching to live trading.
+  await page.getByText("Handeln är igång.").waitFor();
+  await page.getByRole("button", { name: "Pausa" }).click();
+  await page.getByRole("button", { name: "Återuppta" }).waitFor();
+  assert.deepEqual(sent["/api/actions/options"].body, { action: "control", payload: { command: "pause" } });
+  assert.match(await page.locator("#budget-h").locator("xpath=..").innerText(), /100 %[\s\S]*Max per affär[\s\S]*ca 10\s048,24\skr/);
+  await page.getByRole("button", { name: "Aktivera riktig handel" }).click();
+  const liveButton = page.getByRole("button", { name: "Slå på riktig handel med passkey" });
+  await page.getByLabel("Skriv JAG FÖRSTÅR RISKEN").fill("jag förstår risken");
+  assert.equal(await liveButton.isDisabled(), true);
+  await page.getByLabel("Skriv JAG FÖRSTÅR RISKEN").fill("JAG FÖRSTÅR RISKEN");
+  await page.screenshot({ path: `${SHOTS}settings-live-${name}.png`, fullPage: true });
+  await liveButton.click();
+  await page.getByText("Riktig handel är vald.", { exact: true }).waitFor();
+  assert.deepEqual(sent["/api/actions/trading-mode"].body.budget_pct, "10");
+  await page.getByRole("button", { name: "Tillbaka till papper" }).waitFor();
+
   await page.getByRole("radio", { name: "Uttag" }).click();
   await page.getByLabel("Belopp i kronor").fill("12,345");
   assert.equal(await page.getByRole("button", { name: "Bekräfta med passkey" }).isDisabled(), true);

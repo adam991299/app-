@@ -74,7 +74,7 @@ export async function logout(): Promise<void> {
 
 /** Asks for Face ID / the passkey bound to exactly this action and values, then runs it. */
 async function confirmed(
-  action: "deposit" | "risk_profile",
+  action: "deposit" | "risk_profile" | "control" | "budget" | "trading_mode",
   payload: Record<string, string>,
   path: string,
 ): Promise<string> {
@@ -93,4 +93,36 @@ export function registerCashFlow(amount: string, note: string): Promise<string> 
 
 export function setRiskProfile(profile: "cautious" | "balanced" | "offensive"): Promise<string> {
   return confirmed("risk_profile", { profile }, "/actions/risk-profile");
+}
+
+export interface ControlsState {
+  mode: "paper" | "live";
+  paused: boolean;
+  kill_switch_engaged: boolean;
+  budget_pct: string;
+  pending_budget_pct: string | null;
+  pending_budget_from: string | null;
+}
+
+export async function controlsState(): Promise<ControlsState> {
+  const response = await fetch("/api/controls", {
+    credentials: "same-origin",
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!response.ok) throw new ActionError("Jag når inte servern just nu.");
+  return (await response.json()) as ControlsState;
+}
+
+export type Command = "pause" | "resume" | "kill_switch" | "reset_kill_switch";
+
+export function sendControl(command: Command): Promise<string> {
+  return confirmed("control", { command }, "/actions/control");
+}
+
+export function setBudget(pct: string): Promise<string> {
+  return confirmed("budget", { pct }, "/actions/budget");
+}
+
+export function setTradingMode(mode: "paper" | "live", phrase = "", budgetPct = "10"): Promise<string> {
+  return confirmed("trading_mode", { mode, phrase, budget_pct: budgetPct }, "/actions/trading-mode");
 }

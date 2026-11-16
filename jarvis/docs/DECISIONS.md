@@ -4,6 +4,22 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D29. Jarvis budget, paus/kill switch och byte till riktig handel
+- **Budget (§7.1):** alla riskgränser och positionsstorlekar räknas mot den del av kontot
+  Jarvis får förvalta. Sänkning gäller direkt; höjning från i morgon; mer än en
+  fördubbling tidigast efter 24 timmar. Förhandsvisningen visar max per affär och förlusten
+  om stoppen slår, i kronor. Stresstester ("en dålig dag 1 av 20", "mars 2020") och förväntat
+  spann är **inte byggda**: de kräver riskmodell och live-historik som inte finns än.
+- **Paus, kill switch, återstart** kräver passkey. Ingen av dem säljer något; öppna positioner
+  skyddas av stoppordrarna hos mäklaren.
+- **Riktig handel (§9.4):** passkey + exakt frasen `JAG FÖRSTÅR RISKEN` + startbudget
+  (förvalt 10 %; bytet höjer aldrig budgeten). Tillbaka till papper i ett steg.
+- **Spärr:** handeln stoppas så länge valet (papper/riktig) inte stämmer med kontot gatewayn är
+  inloggad på (IBKR:s papperskonton börjar med D). Att logga in gatewayn på det riktiga
+  kontot är ett eget steg på servern (bot-användare utan uttagsrätt, `TRADING_MODE=live`) som
+  inte är förberett i `docker-compose.yml` än; så länge det inte är gjort står handeln still
+  i stället för att blanda ihop papper och riktiga pengar.
+
 ### D28. Passkeys och skyddade åtgärder
 Bara Adam: den första passkeyn kräver en slumpad engångskod som bara finns i serverns
 `.env`. Varje ändring kräver, utöver inloggning, en ny passkey-bekräftelse bunden till
