@@ -89,6 +89,13 @@ tax:
 economics:
   break_even_warning_pct: 3.0
   min_living_buffer_months: 12
+  # Fasta kostnader per månad i kronor (beslut D9: allt gratis). Ändras här om något kostar.
+  monthly_costs_sek:
+    Server (Oracle Always Free): 0.0
+    Marknadsdata (IBKR, USA-aktier): 0.0
+    Övrigt: 0.0
+  index_fund_symbol: SPY
+  index_fund_name_sv: S&P 500-fonden (SPY)
 check_in:
   interval_days: 7
   halve_risk_after_days: 3

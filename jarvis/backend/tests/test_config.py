@@ -95,7 +95,17 @@ def test_every_default_is_the_number_in_the_spec() -> None:
             "isk_tax_free_level_sek": None,
             "isk_schablon_tax_pct": None,
         },
-        "economics": {"break_even_warning_pct": 3.0, "min_living_buffer_months": 12},  # §1.5
+        "economics": {  # §1.5; costs per D9, index fund as the yardstick (§0 rule 7)
+            "break_even_warning_pct": 3.0,
+            "min_living_buffer_months": 12,
+            "monthly_costs_sek": {
+                "Server (Oracle Always Free)": 0.0,
+                "Marknadsdata (IBKR, USA-aktier)": 0.0,
+                "Övrigt": 0.0,
+            },
+            "index_fund_symbol": "SPY",
+            "index_fund_name_sv": "S&P 500-fonden (SPY)",
+        },
         "check_in": {"interval_days": 7, "halve_risk_after_days": 3, "wind_down_after_days": 7},
         "project_stop_rules": {  # §16
             "evaluation_months": 12,
@@ -320,3 +330,8 @@ def test_accepted_circuit_breakers_always_escalate(
     else:
         assert breakers.daily_loss_pct < breakers.weekly_loss_pct
         assert breakers.weekly_loss_pct < breakers.kill_switch_drawdown_pct
+
+
+def test_negative_costs_are_refused() -> None:
+    with pytest.raises(ValueError, match="negative"):
+        Settings.model_validate({"economics": {"monthly_costs_sek": {"VPS": -1}}})

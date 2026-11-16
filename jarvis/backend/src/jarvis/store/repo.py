@@ -4,9 +4,10 @@ audit log in the same transaction, so the log can never miss a change (§10)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -17,7 +18,7 @@ from jarvis.domain import Side
 from jarvis.risk.breakers import EquityMarks
 from jarvis.risk.profiles import RiskProfile
 from jarvis.store.db import session_factory
-from jarvis.store.periods import day_start, week_start
+from jarvis.store.periods import ACCOUNT_TIMEZONE, day_start, week_start
 from jarvis.store.tables import (
     AccountState,
     AuditEntry,
@@ -25,6 +26,7 @@ from jarvis.store.tables import (
     Controls,
     EquitySnapshot,
     FillRow,
+    IndexFundClose,
     OrderRow,
     ResearchTrial,
     RiskDecisionRow,
@@ -514,6 +516,57 @@ class Store:
         async with self._sessions() as session:
             row = await session.get(AccountState, 1)
             return (row.at, row.payload) if row is not None else None
+
+    async def save_index_fund_close(
+        self, symbol: str, day: date, close: Decimal, fx_to_base: Decimal
+    ) -> None:
+        if close <= 0 or fx_to_base <= 0:
+            raise ValueError("close and exchange rate must be positive")
+        values = {"close": close, "fx_to_base": fx_to_base}
+        async with self._sessions.begin() as session:
+            await session.execute(
+                insert(IndexFundClose)
+                .values(symbol=symbol, day=day, **values)
+                .on_conflict_do_update(
+                    index_elements=[IndexFundClose.symbol, IndexFundClose.day], set_=values
+                )
+            )
+
+    async def index_fund_values(self, symbol: str) -> list[tuple[date, Decimal]]:
+        """(day, close in the base currency), oldest first."""
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(IndexFundClose)
+                .where(IndexFundClose.symbol == symbol)
+                .order_by(IndexFundClose.day)
+            )
+            return [(r.day, r.close * r.fx_to_base) for r in rows]
+
+    async def daily_trading_index(
+        self, tz: ZoneInfo = ACCOUNT_TIMEZONE
+    ) -> list[tuple[date, Decimal]]:
+        """The time-weighted index (``adjusted``) at the last snapshot of each day, in the
+        account's timezone, oldest first. It moves only with trading results."""
+        async with self._sessions() as session:
+            rows = await session.execute(
+                select(EquitySnapshot.at, EquitySnapshot.adjusted).order_by(
+                    EquitySnapshot.at, EquitySnapshot.id
+                )
+            )
+            last: dict[date, Decimal] = {}
+            for at, adjusted in rows:
+                last[at.astimezone(tz).date()] = adjusted
+        return sorted(last.items())
+
+    async def commissions_by_currency(self) -> dict[str, Decimal]:
+        """All commissions paid so far, per instrument currency."""
+        async with self._sessions() as session:
+            rows = await session.execute(
+                select(OrderRow.currency, func.sum(FillRow.commission))
+                .join(OrderRow, OrderRow.client_order_id == FillRow.client_order_id)
+                .group_by(OrderRow.currency)
+            )
+            return {currency or "": Decimal(total) for currency, total in rows if total}
 
     async def save_strategy_state(
         self, strategy: str, payload: dict[str, Any], *, at: datetime

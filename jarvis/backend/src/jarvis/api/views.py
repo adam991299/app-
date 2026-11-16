@@ -9,9 +9,14 @@ from decimal import Decimal
 from typing import Any
 
 from jarvis.api.schemas import (
+    AmountOut,
+    ComparisonOut,
+    ComparisonPointOut,
+    CostOut,
     DayTradeOut,
     DaytradingOut,
     DaytradingStatus,
+    EconomicsOut,
     MarketOut,
     PortfolioOut,
     PositionOut,
@@ -22,6 +27,9 @@ from jarvis.api.schemas import (
     TradesOut,
 )
 from jarvis.config.settings import Settings
+from jarvis.economics.costs import break_even
+from jarvis.economics.isk import tax_drag_pct
+from jarvis.economics.performance import Comparison, compare, verdict_sv
 from jarvis.markets.calendar import CalendarRangeError, Exchange, next_open, session_at
 from jarvis.risk.profiles import NAMES_SV
 from jarvis.risk.reasons import Reason, message_sv
@@ -182,6 +190,63 @@ class Views:
             as_of=at,
         )
 
+    async def economics(self) -> EconomicsOut:
+        now = self._clock()
+        rules = self._settings.economics
+        stored = await self._store.account_state()
+        base = stored[1]["base_currency"] if stored is not None else "SEK"
+        capital = Decimal(stored[1]["net_liquidation"]) if stored is not None else None
+        costs = {name: Decimal(str(v)) for name, v in rules.monthly_costs_sek.items()}
+        limit = Decimal(str(rules.break_even_warning_pct))
+        even = break_even(costs, capital, limit) if capital is not None and capital > 0 else None
+        drag, tax_text = self._tax(capital, now)
+        comparison = compare(
+            await self._store.daily_trading_index(),
+            await self._store.index_fund_values(rules.index_fund_symbol),
+        )
+        commissions = await self._store.commissions_by_currency()
+        return EconomicsOut(
+            base_currency=base,
+            capital=None if capital is None else _exact(capital),
+            monthly_costs=[CostOut(name_sv=n, monthly=_exact(c)) for n, c in costs.items()],
+            monthly_total=_exact(sum(costs.values(), Decimal(0))),
+            break_even_pct=None if even is None else even.required_return_pct.quantize(CENT),
+            break_even_warning=even is not None and even.warning,
+            break_even_limit_pct=rules.break_even_warning_pct,
+            tax_drag_pct=drag,
+            tax_sv=tax_text,
+            index_name_sv=rules.index_fund_name_sv,
+            verdict_sv=verdict_sv(comparison, rules.index_fund_name_sv),
+            comparison=None if comparison is None else _comparison(comparison),
+            commissions=[
+                AmountOut(amount=_exact(amount), currency=currency)
+                for currency, amount in sorted(commissions.items())
+            ],
+            as_of=now,
+        )
+
+    def _tax(self, capital: Decimal | None, now: datetime) -> tuple[Decimal | None, str]:
+        tax = self._settings.tax
+        if tax.model != "isk":
+            return None, "Kontot beskattas inte som ISK enligt inställningarna."
+        if tax.tax_year is None or tax.isk_schablon_tax_pct is None:
+            return None, (
+                "Årets ISK-siffror från Skatteverket saknas i inställningarna, så jag räknar "
+                "inte med skatten än. Jag gissar dem aldrig."
+            )
+        if tax.tax_year != now.year:
+            return None, (
+                f"ISK-siffrorna i inställningarna gäller {tax.tax_year}. Lägg in årets siffror "
+                "från Skatteverket så räknar jag med skatten igen."
+            )
+        if capital is None or capital <= 0:
+            return None, "Skatten räknas när jag vet hur stort kapitalet är."
+        drag = tax_drag_pct(capital, tax).quantize(CENT)
+        return drag, (
+            f"ISK-skatten motsvarar ungefär {_sv(drag)} % av kapitalet per år med "
+            f"{tax.tax_year} års siffror. Den räknas in när jag jämför mig med indexfonden."
+        )
+
     async def today(self) -> TodayOut:
         now = self._clock()
         return TodayOut(
@@ -230,6 +295,22 @@ def _day_trade(trip: RoundTrip) -> DayTradeOut:
         opened_at=trip.first_at,
         closed_at=None if trip.result is None else trip.last_at,
         explanation_sv=trip.explanation_sv,
+    )
+
+
+def _comparison(result: Comparison) -> ComparisonOut:
+    return ComparisonOut(
+        start=result.points[0].day,
+        days=result.days,
+        jarvis_pct=result.jarvis_pct.quantize(CENT),
+        index_pct=result.index_pct.quantize(CENT),
+        difference_pct=result.difference_pct.quantize(CENT),
+        points=[
+            ComparisonPointOut(
+                day=p.day, jarvis=p.jarvis.quantize(CENT), index=p.index.quantize(CENT)
+            )
+            for p in result.points
+        ],
     )
 
 

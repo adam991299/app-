@@ -12,7 +12,14 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from jarvis.api.schemas import DaytradingOut, PortfolioOut, StatusOut, TodayOut, TradesOut
+from jarvis.api.schemas import (
+    DaytradingOut,
+    EconomicsOut,
+    PortfolioOut,
+    StatusOut,
+    TodayOut,
+    TradesOut,
+)
 
 ENDPOINTS: dict[str, type[BaseModel]] = {
     "GET /api/status": StatusOut,
@@ -20,6 +27,7 @@ ENDPOINTS: dict[str, type[BaseModel]] = {
     "GET /api/trades": TradesOut,
     "GET /api/today": TodayOut,
     "GET /api/daytrading": DaytradingOut,
+    "GET /api/economics": EconomicsOut,
 }
 
 CONTRACT_PATH = Path(__file__).resolve().parents[4] / "contracts" / "api.schema.json"

@@ -83,6 +83,7 @@ class Runner:
         risk: Risk | None = None,
         costs: CostModel | None = None,
         day_trader: DayTrader | None = None,
+        index_fund: Instrument | None = None,
     ) -> None:
         self._broker = broker
         self._engine = engine
@@ -100,6 +101,7 @@ class Runner:
         self._risk = risk or Risk()
         self._costs = costs or CostModel()
         self._day_trader = day_trader
+        self._index_fund = index_fund
         self.pending: list[Pending] = []
         self.last_close_processed: date | None = None
 
@@ -184,7 +186,20 @@ class Runner:
             params, edge_r = params_from(approval[2]), approval[1]
         await self._update_stops(bars, params)
         await self._queue_setups(bars, day, params, edge_r)
+        await self._record_index_fund(day)
         self.last_close_processed = day
+
+    async def _record_index_fund(self, day: date) -> None:
+        """The index fund's close in the base currency, for the honest comparison (§1.5)."""
+        if self._index_fund is None:
+            return
+        quote = await self._market.quote(self._index_fund)
+        if quote is None:
+            logger.warning("no quote for the index fund %s on %s", self._index_fund.symbol, day)
+            return
+        await self._store.save_index_fund_close(
+            self._index_fund.symbol, day, quote.last, quote.fx_to_base
+        )
 
     async def _update_stops(self, bars: dict[str, list[Bar]], params: TrendParameters) -> None:
         for order in await self._store.open_orders():

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -10,6 +10,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -158,6 +159,19 @@ class AccountState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     at: Mapped[datetime] = mapped_column(UTC_TIME)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class IndexFundClose(Base):
+    """The index fund's close each trading day and the rate to the base currency that day,
+    recorded by the runner after the close. Jarvis is compared with it (§0 rule 7, §1.5)."""
+
+    __tablename__ = "index_fund_closes"
+    __table_args__ = (CheckConstraint("close > 0 AND fx_to_base > 0", name="positive_values"),)
+
+    symbol: Mapped[str] = mapped_column(String(12), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    close: Mapped[Decimal] = mapped_column(MONEY)
+    fx_to_base: Mapped[Decimal] = mapped_column(MONEY)
 
 
 class StrategyState(Base):

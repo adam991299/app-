@@ -345,3 +345,16 @@ async def test_entry_window_outside_sessions(store: Store) -> None:
     runner, *_ = await make(store, DURING)
     assert not runner._entry_window_open(datetime(2026, 11, 14, 15, tzinfo=UTC))  # Saturday
     assert not runner._entry_window_open(datetime(2031, 6, 2, 15, tzinfo=UTC))  # no calendar
+
+
+async def test_the_index_fund_close_is_recorded_after_the_close(store: Store) -> None:
+    runner, _sim, market, clock, _ = await make(store, AFTER)
+    await runner.start()
+    spy = instrument("SPY", sector="index")
+    runner._index_fund = spy
+    market.prices["SPY"] = D("612.40")
+    await runner.after_close(date(2026, 11, 16))
+    assert await store.index_fund_values("SPY") == [(date(2026, 11, 16), D("612.40"))]
+    del market.prices["SPY"]
+    await runner.after_close(date(2026, 11, 17))  # no quote: nothing is invented
+    assert len(await store.index_fund_values("SPY")) == 1

@@ -263,6 +263,23 @@ class Economics(_Section):
 
     break_even_warning_pct: float = Field(default=3.0, gt=0, le=10)
     min_living_buffer_months: int = Field(default=12, ge=12, le=120)
+    # Fixed costs per month in SEK, by item (Swedish name as shown in the app). D9: all free.
+    monthly_costs_sek: dict[str, float] = Field(
+        default_factory=lambda: {
+            "Server (Oracle Always Free)": 0.0,
+            "Marknadsdata (IBKR, USA-aktier)": 0.0,
+            "Övrigt": 0.0,
+        }
+    )
+    # The index fund Jarvis must beat (§0 rule 7). A US-listed ETF, valued in SEK each day.
+    index_fund_symbol: str = Field(default="SPY", min_length=1, max_length=12)
+    index_fund_name_sv: str = Field(default="S&P 500-fonden (SPY)", min_length=1)
+
+    @model_validator(mode="after")
+    def _costs_are_not_negative(self) -> Self:
+        if any(cost < 0 for cost in self.monthly_costs_sek.values()):
+            raise ValueError("monthly_costs_sek cannot be negative")
+        return self
 
 
 class CheckIn(_Section):

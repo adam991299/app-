@@ -12,7 +12,7 @@ The web app mirrors these types in ``web/lib/api.ts``; a test keeps them in sync
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -146,4 +146,48 @@ class DaytradingOut(_Schema):
     max_daily_loss_pct: float
     pause_after_losses: int
     trades: list[DayTradeOut]  # today's, newest first
+    as_of: datetime
+
+
+class CostOut(_Schema):
+    name_sv: str
+    monthly: Money  # base currency
+
+
+class ComparisonPointOut(_Schema):
+    day: date
+    jarvis: Money  # 100 at the start
+    index: Money  # 100 at the start
+
+
+class ComparisonOut(_Schema):
+    start: date
+    days: int  # trading days compared
+    jarvis_pct: Money  # change since the start, after costs
+    index_pct: Money
+    difference_pct: Money  # percentage points, + when Jarvis is ahead
+    points: list[ComparisonPointOut]
+
+
+class AmountOut(_Schema):
+    amount: Money
+    currency: str
+
+
+class EconomicsOut(_Schema):
+    """GET /api/economics — the "Ekonomi" view (§1.5)."""
+
+    base_currency: str
+    capital: Money | None  # net liquidation; null until the first state report
+    monthly_costs: list[CostOut]
+    monthly_total: Money
+    break_even_pct: Money | None  # per year, just to cover the fixed costs
+    break_even_warning: bool
+    break_even_limit_pct: float
+    tax_drag_pct: Money | None  # ISK tax as a share of the capital per year
+    tax_sv: str
+    index_name_sv: str
+    verdict_sv: str
+    comparison: ComparisonOut | None
+    commissions: list[AmountOut]  # paid so far, per currency
     as_of: datetime

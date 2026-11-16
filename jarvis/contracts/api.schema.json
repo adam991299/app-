@@ -203,6 +203,228 @@
       "title": "DaytradingOut",
       "type": "object"
     },
+    "GET /api/economics": {
+      "$defs": {
+        "AmountOut": {
+          "additionalProperties": false,
+          "properties": {
+            "amount": {
+              "title": "Amount",
+              "type": "string"
+            },
+            "currency": {
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "AmountOut",
+          "type": "object"
+        },
+        "ComparisonOut": {
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "title": "Days",
+              "type": "integer"
+            },
+            "difference_pct": {
+              "title": "Difference Pct",
+              "type": "string"
+            },
+            "index_pct": {
+              "title": "Index Pct",
+              "type": "string"
+            },
+            "jarvis_pct": {
+              "title": "Jarvis Pct",
+              "type": "string"
+            },
+            "points": {
+              "items": {
+                "$ref": "#/$defs/ComparisonPointOut"
+              },
+              "title": "Points",
+              "type": "array"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "days",
+            "jarvis_pct",
+            "index_pct",
+            "difference_pct",
+            "points"
+          ],
+          "title": "ComparisonOut",
+          "type": "object"
+        },
+        "ComparisonPointOut": {
+          "additionalProperties": false,
+          "properties": {
+            "day": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            },
+            "index": {
+              "title": "Index",
+              "type": "string"
+            },
+            "jarvis": {
+              "title": "Jarvis",
+              "type": "string"
+            }
+          },
+          "required": [
+            "day",
+            "jarvis",
+            "index"
+          ],
+          "title": "ComparisonPointOut",
+          "type": "object"
+        },
+        "CostOut": {
+          "additionalProperties": false,
+          "properties": {
+            "monthly": {
+              "title": "Monthly",
+              "type": "string"
+            },
+            "name_sv": {
+              "title": "Name Sv",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name_sv",
+            "monthly"
+          ],
+          "title": "CostOut",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "GET /api/economics — the \"Ekonomi\" view (§1.5).",
+      "properties": {
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "base_currency": {
+          "title": "Base Currency",
+          "type": "string"
+        },
+        "break_even_limit_pct": {
+          "title": "Break Even Limit Pct",
+          "type": "number"
+        },
+        "break_even_pct": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Break Even Pct"
+        },
+        "break_even_warning": {
+          "title": "Break Even Warning",
+          "type": "boolean"
+        },
+        "capital": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Capital"
+        },
+        "commissions": {
+          "items": {
+            "$ref": "#/$defs/AmountOut"
+          },
+          "title": "Commissions",
+          "type": "array"
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComparisonOut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "index_name_sv": {
+          "title": "Index Name Sv",
+          "type": "string"
+        },
+        "monthly_costs": {
+          "items": {
+            "$ref": "#/$defs/CostOut"
+          },
+          "title": "Monthly Costs",
+          "type": "array"
+        },
+        "monthly_total": {
+          "title": "Monthly Total",
+          "type": "string"
+        },
+        "tax_drag_pct": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tax Drag Pct"
+        },
+        "tax_sv": {
+          "title": "Tax Sv",
+          "type": "string"
+        },
+        "verdict_sv": {
+          "title": "Verdict Sv",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_currency",
+        "capital",
+        "monthly_costs",
+        "monthly_total",
+        "break_even_pct",
+        "break_even_warning",
+        "break_even_limit_pct",
+        "tax_drag_pct",
+        "tax_sv",
+        "index_name_sv",
+        "verdict_sv",
+        "comparison",
+        "commissions",
+        "as_of"
+      ],
+      "title": "EconomicsOut",
+      "type": "object"
+    },
     "GET /api/portfolio": {
       "$defs": {
         "PositionOut": {

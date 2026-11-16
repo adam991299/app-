@@ -17,7 +17,7 @@ from ib_async import IB
 
 from jarvis.broker.ibkr import IbkrBroker, IbkrSettings
 from jarvis.config import ConfigError, Settings
-from jarvis.domain import Instrument
+from jarvis.domain import AssetClass, Instrument
 from jarvis.execution.alerts import AlertLevel, Alerts
 from jarvis.execution.engine import ExecutionEngine
 from jarvis.marketdata.ibkr import IbkrMarket
@@ -118,6 +118,9 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             clock=clock,
             before_tick=monitor.refresh,
             risk=settings.risk,
+            index_fund=Instrument(
+                settings.economics.index_fund_symbol, "SMART", "USD", AssetClass.ETF, "index"
+            ),
             day_trader=DayTrader(
                 broker=broker,
                 engine=engine,

@@ -351,3 +351,75 @@ def test_daytrading_wording(status: str, text: str) -> None:
 
     payload = {"status": status, "losses_in_row": 0, "max_daily_loss_pct": 1.5}
     assert _daytrading_sv(payload) == text
+
+
+async def test_economics_before_any_data_is_honest(client: httpx.AsyncClient) -> None:
+    body = (await client.get("/economics")).json()
+    assert body["capital"] is None
+    assert body["break_even_pct"] is None
+    assert body["comparison"] is None
+    assert "inte tillräckligt med data" in body["verdict_sv"]
+    assert "saknas i inställningarna" in body["tax_sv"]
+    assert body["commissions"] == []
+
+
+async def test_economics_compares_with_the_index_fund(
+    client: httpx.AsyncClient, store: Store
+) -> None:
+    await store.save_account_state(state(), at=NOW)
+    start = NOW - timedelta(days=3)
+    for i, value in enumerate(["100000", "101000", "102000"]):
+        await store.record_equity(at=start + timedelta(days=i), net_liquidation=D(value), cash=D(0))
+        await store.save_index_fund_close(
+            "SPY", (start + timedelta(days=i)).date(), D(500) + i * 5, D("10.5")
+        )
+    body = (await client.get("/economics")).json()
+    comparison = body["comparison"]
+    assert (comparison["days"], comparison["jarvis_pct"], comparison["index_pct"]) == (
+        3,
+        "2.00",
+        "2.00",
+    )
+    assert comparison["points"][0] == {
+        "day": start.date().isoformat(),
+        "jarvis": "100.00",
+        "index": "100.00",
+    }
+    assert "för tidigt" in body["verdict_sv"]
+    assert body["break_even_pct"] == "0.00"
+    assert body["break_even_warning"] is False
+
+
+@pytest.mark.parametrize(
+    ("tax", "text"),
+    [
+        ({"model": "capital_gains"}, "beskattas inte som ISK"),
+        (
+            {"tax_year": 2025, "isk_tax_free_level_sek": 150000, "isk_schablon_tax_pct": 0.888},
+            "gäller 2025",
+        ),
+        (
+            {"tax_year": 2026, "isk_tax_free_level_sek": 0, "isk_schablon_tax_pct": 1.0},
+            "ungefär 1,00 % av kapitalet",
+        ),
+    ],
+)
+async def test_isk_tax_text(store: Store, clock: Clock, tax: dict[str, Any], text: str) -> None:
+    settings = Settings.model_validate(
+        {"tax": tax, "economics": {"monthly_costs_sek": {"VPS": 300}}}
+    )
+    await store.save_account_state(state(), at=NOW)
+    app = create_api_app(store, settings, clock)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        body = (await c.get("/economics")).json()
+    assert text in body["tax_sv"]
+    assert body["monthly_total"] == "300.00"
+    assert body["break_even_warning"] is True  # 3 600 kr a year on ~100 000 kr is over 3 %
+
+
+async def test_without_capital_no_tax_is_computed(store: Store, clock: Clock) -> None:
+    tax = {"tax_year": 2026, "isk_tax_free_level_sek": 0, "isk_schablon_tax_pct": 1.0}
+    app = create_api_app(store, Settings.model_validate({"tax": tax}), clock)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        body = (await c.get("/economics")).json()
+    assert body["tax_sv"] == "Skatten räknas när jag vet hur stort kapitalet är."
