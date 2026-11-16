@@ -267,7 +267,7 @@ class Runner:
         risk = apply_profile(self._risk, await self._store.risk_profile(self._clock()))
         sized = size_position(
             instrument=instrument,
-            equity=account.net_liquidation,
+            equity=account.net_liquidation * await self._store.budget_pct(self._clock()) / 100,
             free_cash=min(account.cash - reserve, account.spendable),
             entry=limit,
             stop=stop,

@@ -173,9 +173,10 @@ class DayTrader:
         except BrokerError:
             await self._publish(now, Status.UNKNOWN, open_count=open_count)
             return False
+        budget = await self._store.budget_pct(now)
         status = day_status(
             in_base,
-            account.net_liquidation,
+            account.net_liquidation * budget / 100,  # the limits apply to Jarvis's share
             self._risk,
             open_count=open_count,
         )
@@ -243,7 +244,7 @@ class DayTrader:
         reserve = account.net_liquidation * Decimal(str(risk.portfolio.min_cash_reserve_pct)) / 100
         sized = size_position(
             instrument=instrument,
-            equity=account.net_liquidation,
+            equity=account.net_liquidation * await self._store.budget_pct(self._clock()) / 100,
             free_cash=min(account.cash - reserve, account.spendable),
             entry=limit,
             stop=stop,

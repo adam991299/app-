@@ -122,7 +122,10 @@ class ExecutionEngine:
         clock_drift: Callable[[], float],
         alerts: Alerts,
         base_currency: str = "SEK",
+        account_is_paper: bool | None = None,
     ) -> None:
+        """``account_is_paper`` says which kind of account the broker is logged in to;
+        trading halts while it differs from the mode Adam chose (None: not checked)."""
         self._broker = broker
         self._store = store
         self._risk = risk
@@ -133,6 +136,7 @@ class ExecutionEngine:
         self._clock_drift = clock_drift
         self._alerts = alerts
         self._base_currency = base_currency
+        self._account_is_paper = account_is_paper
         self._broker_errors = 0
         self._reconciled = False
         self._problems: set[str] = set()  # keys found since the current reconciliation began
@@ -168,9 +172,15 @@ class ExecutionEngine:
         if marks is None:
             return BreakerStatus(TradingState.HALTED, (Reason.NOT_RECONCILED,), False)
         controls = await self._store.controls()
+        health = self.health()
+        if self._account_is_paper is not None:
+            chosen_paper = controls.trading_mode != "live"
+            health = dataclasses.replace(
+                health, account_mode_matches=chosen_paper == self._account_is_paper
+            )
         status = evaluate(
             marks,
-            self.health(),
+            health,
             Controls(paused=controls.paused, kill_switch_engaged=controls.kill_switch_engaged),
             self._risk.circuit_breakers,
         )
@@ -767,9 +777,14 @@ class ExecutionEngine:
             if quote is not None:
                 quotes[symbol] = quote
 
+        # Jarvis budget (§7.1): every limit is measured against the share Jarvis may manage.
+        budget = await self._store.budget_pct(now)
+        managed = dataclasses.replace(
+            account, net_liquidation=account.net_liquidation * budget / 100
+        )
         return RiskContext(
             now=now,
-            account=account,
+            account=managed,
             positions=positions,
             pending=pending,
             protected=active.coverage,

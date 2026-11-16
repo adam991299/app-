@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from jarvis.broker.models import Fill, OrderStatus
 from jarvis.domain import Side
 from jarvis.store.db import DatabaseConfigError, database_url_from_env
+from jarvis.store.periods import day_start
 from jarvis.store.repo import NewOrder, Store
 from tests.conftest import ALEMBIC_INI, migrate
 
@@ -382,3 +383,31 @@ async def test_raising_the_risk_level_waits_for_the_next_day(store: Store) -> No
     lowered = await store.set_risk_profile(RiskProfile.CAUTIOUS, actor="adam", at=effective)
     assert lowered == effective  # lowering applies at once
     assert await store.risk_profile(effective) is RiskProfile.CAUTIOUS
+
+
+async def test_budget_lowering_is_immediate_and_raising_waits(store: Store) -> None:
+    assert await store.budget_pct(NOW) == 100
+    assert await store.set_budget(Decimal(10), actor="adam", at=NOW) == NOW
+    assert await store.budget_pct(NOW) == 10
+    assert await store.pending_budget(NOW) is None
+    effective = await store.set_budget(Decimal(20), actor="adam", at=NOW)  # doubling: next day
+    assert effective == day_start(NOW) + timedelta(days=1)
+    assert await store.budget_pct(NOW) == 10
+    assert await store.pending_budget(NOW) == (Decimal(20), effective)
+    assert await store.budget_pct(effective) == 20
+
+
+async def test_more_than_doubling_the_budget_waits_24_hours(store: Store) -> None:
+    await store.set_budget(Decimal(10), actor="adam", at=NOW)
+    effective = await store.set_budget(Decimal(50), actor="adam", at=NOW)
+    assert effective == NOW + timedelta(hours=24)
+    for wrong in (Decimal(0), Decimal(101)):
+        with pytest.raises(ValueError, match="share of the account"):
+            await store.set_budget(wrong, actor="adam", at=NOW)
+
+
+async def test_trading_mode_is_audited(store: Store) -> None:
+    await store.set_trading_mode("live", actor="adam", at=NOW)
+    assert (await store.controls()).trading_mode == "live"
+    with pytest.raises(ValueError, match="unknown"):
+        await store.set_trading_mode("margin", actor="adam", at=NOW)

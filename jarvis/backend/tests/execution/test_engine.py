@@ -792,3 +792,32 @@ async def test_exit_rejected_by_the_broker_and_too_many_attempts(world: World) -
     final = await world.engine.close_position(cid, "x")
     assert final.detail == "too many attempts"
     assert any("5 gånger" in m for _, m in world.alerts.sent)
+
+
+# -- Jarvis budget and the paper/live interlock (§7.1, §9.4) -----------------------------
+
+
+async def test_limits_are_measured_against_the_jarvis_budget(world: World) -> None:
+    await world.store.set_budget(D(10), actor="adam", at=NOW)  # 10 000 of 100 000
+    result = await world.engine.submit_entry(signal())  # 5 000: half the budget
+    assert result.outcome is Outcome.REJECTED_BY_RISK
+    assert Reason.POSITION_LIMIT in result.reasons
+    await world.store.set_budget(D(100), actor="adam", at=NOW)  # a raise waits a day
+    world.clock.now = NOW + timedelta(days=1, hours=1)
+    assert (await world.engine.submit_entry(signal("trend:AAPL:2026-11-17"))).outcome is (
+        Outcome.SUBMITTED
+    )
+
+
+@pytest.mark.parametrize(
+    ("logged_in_paper", "chosen", "halted"),
+    [(True, "paper", False), (True, "live", True), (False, "live", False), (False, "paper", True)],
+)
+async def test_trading_halts_when_paper_and_live_are_mixed_up(
+    world: World, logged_in_paper: bool, chosen: str, halted: bool
+) -> None:
+    world.engine._account_is_paper = logged_in_paper
+    await world.store.set_trading_mode(chosen, actor="adam", at=NOW)
+    status = await world.engine.trading_status(NOW)
+    assert (Reason.ACCOUNT_MODE_MISMATCH in status.reasons) is halted
+    assert (status.state is TradingState.HALTED) is halted

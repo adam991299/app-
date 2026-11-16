@@ -107,6 +107,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             clock=clock,
             clock_drift=monitor.drift,
             alerts=alerts,
+            account_is_paper=ibkr.account.upper().startswith("D"),  # IBKR paper ids: DU…
         )
         runner = Runner(
             broker=broker,
