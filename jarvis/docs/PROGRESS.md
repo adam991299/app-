@@ -2,6 +2,19 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Daytrading-vyn i appen
+
+- `GET /api/daytrading` och sidan `/daytrading` (kort på hemskärmen, detaljer ett tryck
+  bort): läge på svenska (aktiv, pausad och varför, avstängd tills validering), öppna av max,
+  dagens resultat i kronor, förluster i rad, regler och dagens affärer med köp, försäljning
+  och resultat. Tomt läge och fel-läge finns.
+- Rättat fel: dagsförlusten för daytrading räknades i dollar men jämfördes med en gräns i
+  kronor. Nu räknas den om med aktuell växelkurs, och utan kurs öppnas inga nya daytrades.
+- Priser i förklaringarna skrivs med decimalkomma.
+- Daytradingens läge sparas i `strategy_state` (migrering 0006).
+- 558 backend-tester gröna, 100 % i risk, mäklare, order och ekonomi; Playwright-kontroller
+  med skärmdumpar i mobil- och datorstorlek (`docs/screenshots/daytrading-*`).
+
 ## 2026-11-16 — Köp bara för likvida pengar (A6)
 
 - `Account.settled_cash` (IBKR:s `SettledCash`) och `spendable`. Risk-motorn avvisar ett köp

@@ -266,12 +266,13 @@ class DayTrader:
                 expected_edge=Decimal(str(edge_r)) * risk_amount,
                 estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
                 explanation_sv=(
-                    f"Daytrade igen: kursen bröt över dagens högsta nivå ({setup.level}). "
+                    "Daytrade igen: kursen bröt över dagens högsta nivå "
+                    f"({price_sv(setup.level)}). "
                     if again
                     else f"Daytrade: kursen bröt över de första {params.range_minutes} "
-                    f"minuternas högsta nivå ({setup.level}). "
+                    f"minuternas högsta nivå ({price_sv(setup.level)}). "
                 )
-                + f"Stopp vid öppningsintervallets lägsta nivå {stop}.",
+                + f"Stopp vid öppningsintervallets lägsta nivå {price_sv(stop)}.",
                 features={"level": str(setup.level), "range_low": str(stop)},
             )
         )
@@ -309,3 +310,8 @@ def day_status(results: list[Decimal], equity: Decimal, risk: Risk, *, open_coun
     if open_count >= risk.concurrency.max_concurrent_daytrades:
         return Status.FULL
     return Status.ACTIVE
+
+
+def price_sv(value: Decimal) -> str:
+    """A price the Swedish way for explanations, e.g. 151,95."""
+    return f"{value:.2f}".replace(".", ",")

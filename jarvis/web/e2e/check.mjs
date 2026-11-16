@@ -12,20 +12,20 @@ const BASE = "http://127.0.0.1:3111";
 const SHOTS = new URL("../../docs/screenshots/", import.meta.url).pathname;
 const SIZES = { iphone: { width: 390, height: 844 }, desktop: { width: 1440, height: 900 } };
 
-async function open(browser, size, data, options = {}) {
+async function open(browser, size, data, options = {}, path = "/") {
   const context = await browser.newContext({ viewport: size, deviceScaleFactor: 2, ...options });
   const page = await context.newPage();
   await page.route("**/api/**", (route) => {
     const path = new URL(route.request().url()).pathname;
     if (data === null) return route.fulfill({ status: 503, body: "down" });
-    const body = { "/api/status": data.status, "/api/portfolio": data.portfolio, "/api/trades": data.trades, "/api/today": data.today }[path];
+    const body = { "/api/status": data.status, "/api/portfolio": data.portfolio, "/api/trades": data.trades, "/api/today": data.today, "/api/daytrading": data.daytrading ?? fx.daytradingEmpty }[path];
     return route.fulfill({ json: body });
   });
-  await page.goto(BASE);
+  await page.goto(BASE + path);
   return page;
 }
 
-const full = { status: fx.status, portfolio: fx.portfolio, trades: fx.trades, today: fx.today };
+const full = { status: fx.status, portfolio: fx.portfolio, trades: fx.trades, today: fx.today, daytrading: fx.daytrading };
 const kill = { ...full, status: fx.killSwitch };
 const browser = await chromium.launch();
 
@@ -40,6 +40,21 @@ for (const [name, size] of Object.entries(SIZES)) {
   assert.match(await page.locator("text=Köpt 40 XOM").locator("xpath=ancestor::li").innerText(), /16 nov\.? 16:12/);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
   await page.screenshot({ path: `${SHOTS}home-${name}.png`, fullPage: true });
+
+  // Day trading: the home card, then the details one tap away.
+  await page.getByRole("link", { name: /pausat daytrading/ }).click();
+  await page.getByRole("heading", { name: "Daytrading" }).waitFor();
+  assert.equal(await page.locator(".status-line").first().getAttribute("data-tone"), "warning");
+  assert.match(await page.locator(".facts").innerText(), /1 av 5[\s\S]*▼ −1\s820,40\skr[\s\S]*3 av 3/);
+  assert.match(await page.locator("text=NKE · 60 st").locator("xpath=ancestor::li").innerText(), /▼ −89,20\sUSD/);
+  assert.match(await page.locator("text=AMD · 20 st").first().locator("xpath=ancestor::li").innerText(), /Öppen/);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+  await page.screenshot({ path: `${SHOTS}daytrading-${name}.png`, fullPage: true });
+
+  page = await open(browser, size, { ...full, daytrading: fx.daytradingEmpty }, {}, "/daytrading");
+  await page.getByText("Inga daytrades i dag.").waitFor();
+  await page.getByText("Daytrading är avstängd tills strategin har klarat valideringen.").first().waitFor();
+  await page.screenshot({ path: `${SHOTS}daytrading-empty-${name}.png`, fullPage: true });
 
   page = await open(browser, size, fx.empty);
   await page.getByText("Jarvis väntar – marknaden stängd").waitFor();
@@ -61,7 +76,7 @@ await page.getByText("Jag når inte servern just nu.").waitFor({ timeout: 20000 
 await page.unroute("**/api/**");
 await page.route("**/api/**", (route) => {
   const path = new URL(route.request().url()).pathname;
-  return route.fulfill({ json: { "/api/status": fx.status, "/api/portfolio": fx.portfolio, "/api/trades": fx.trades, "/api/today": fx.today }[path] });
+  return route.fulfill({ json: { "/api/status": fx.status, "/api/portfolio": fx.portfolio, "/api/trades": fx.trades, "/api/today": fx.today, "/api/daytrading": fx.daytrading }[path] });
 });
 await page.getByRole("button", { name: "Försök igen" }).click();
 await page.getByText("Jarvis handlar").waitFor();
@@ -73,4 +88,4 @@ assert.equal(await page.locator(".orb").getAttribute("data-tone"), "dimmed");
 assert.equal(await page.locator(".orb-core").evaluate((el) => getComputedStyle(el).animationName), "none");
 
 await browser.close();
-console.log("OK: home screen states verified, screenshots saved");
+console.log("OK: home and day-trading states verified, screenshots saved");

@@ -27,7 +27,7 @@ from jarvis.markets.calendar import CalendarRangeError, Exchange, session_at
 from jarvis.research.costs import CostModel
 from jarvis.risk.profiles import apply_profile
 from jarvis.risk.sizing import size_position
-from jarvis.runner.daytrade import DayTrader
+from jarvis.runner.daytrade import DayTrader, price_sv
 from jarvis.store.repo import Store
 from jarvis.strategy.bars import Bar
 from jarvis.strategy.trend import (
@@ -276,7 +276,8 @@ class Runner:
                 estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
                 explanation_sv=(
                     f"Kursen stängde över sin högsta nivå på {item.params.entry_lookback} dagar "
-                    f"({setup.channel_high}). Stopp {stop}. Valideringen visar i snitt "
+                    f"({price_sv(setup.channel_high)}). Stopp {price_sv(stop)}. "
+                    "Valideringen visar i snitt "
                     f"{edge_text} gånger risken per affär."
                 ),
                 features={"channel_high": str(setup.channel_high), "atr": str(setup.atr)},

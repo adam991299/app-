@@ -47,3 +47,31 @@ export const killSwitch = {
   reasons: [{ code: "kill_switch_engaged", message_sv: "Kill switch är aktiv. Du behöver starta handeln igen i appen." }],
   briefing_sv: "Handeln är stoppad. Öppna positioner skyddas av stoppordrarna hos mäklaren.",
 };
+
+export const daytrading = {
+  status: "losses_in_row",
+  status_sv: "Jag har pausat daytrading för i dag efter 3 förluster i rad.",
+  open_count: 1,
+  max_open: 5,
+  day_result: "-1820.40",
+  base_currency: "SEK",
+  losses_in_row: 3,
+  max_daily_loss_pct: 1.0,
+  pause_after_losses: 3,
+  trades: [
+    { id: "orb:AMD:2026-11-16:2", symbol: "AMD", currency: "USD", quantity: 20, buy_price: "152.10", sell_price: null, result: null, is_open: true, opened_at: "2026-11-16T16:05:00Z", closed_at: null, explanation_sv: "Daytrade igen: kursen bröt över dagens högsta nivå (151,95). Stopp vid öppningsintervallets lägsta nivå 147,20." },
+    { id: "orb:AMD:2026-11-16", symbol: "AMD", currency: "USD", quantity: 20, buy_price: "150.00", sell_price: "151.80", result: "34.00", is_open: false, opened_at: "2026-11-16T14:55:00Z", closed_at: "2026-11-16T15:40:00Z", explanation_sv: "Daytrade: kursen bröt över de första 15 minuternas högsta nivå (149,80). Stopp vid öppningsintervallets lägsta nivå 147,20." },
+    { id: "orb:NKE:2026-11-16", symbol: "NKE", currency: "USD", quantity: 60, buy_price: "61.40", sell_price: "59.95", result: "-89.20", is_open: false, opened_at: "2026-11-16T14:50:00Z", closed_at: "2026-11-16T15:20:00Z", explanation_sv: null },
+  ],
+  as_of: "2026-11-16T18:02:00Z",
+};
+
+export const daytradingEmpty = {
+  ...daytrading,
+  status: "not_validated",
+  status_sv: "Daytrading är avstängd tills strategin har klarat valideringen.",
+  open_count: 0,
+  day_result: "0",
+  losses_in_row: 0,
+  trades: [],
+};

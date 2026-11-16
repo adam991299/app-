@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { DaytradingCard } from "@/components/Daytrading";
 import { Orb, orbTone } from "@/components/Orb";
 import { api, type Market, type Portfolio, type Position, type Status, type Trade } from "@/lib/api";
 import {
@@ -139,6 +140,7 @@ export function Home() {
   const portfolio = useQuery({ queryKey: ["portfolio"], queryFn: api.portfolio });
   const trades = useQuery({ queryKey: ["trades"], queryFn: () => api.trades(10) });
   const today = useQuery({ queryKey: ["today"], queryFn: api.today });
+  const daytrading = useQuery({ queryKey: ["daytrading"], queryFn: api.daytrading });
   const queries = [status, portfolio, trades, today];
 
   if (queries.some((q) => q.isError && q.data === undefined)) {
@@ -197,6 +199,8 @@ export function Home() {
               </div>
             </dl>
           </section>
+
+          {daytrading.data !== undefined && <DaytradingCard data={daytrading.data} />}
 
           <section className="card" aria-labelledby="markets-h">
             <h2 id="markets-h" className="label">Marknader</h2>
