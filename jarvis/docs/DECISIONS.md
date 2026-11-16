@@ -4,6 +4,12 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D33. IBKR Pro Tiered
+Adam bytte till Tiered i Client Portal. IBKR Irelands tabell för svenska aktier visar minst
+10 kr per order med Tiered mot 49 kr med Fixed; för amerikanska aktier räknar Jarvis med
+0,0035 USD per aktie plus ca 0,0005 i avgifter, minst ca 0,40 USD per order (A21, minimum
+för USA inte avläst av Adam ännu). `economics.commission_plan: tiered`.
+
 ### D32. Inget viloläge i indexfond
 Adam: "Att den ska sättas i en indexfond är onödigt. Då måste den sälja hela tiden. Inte
 nödvändigt." Pengar som ingen strategi använder ligger kvar som kontanter. §1.5 "Viloläge =

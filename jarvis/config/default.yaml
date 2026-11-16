@@ -97,7 +97,7 @@ economics:
   index_fund_symbol: SPY
   index_fund_name_sv: S&P 500-fonden (SPY)
   # IBKR:s avgiftsmodell: fixed eller tiered (Client Portal → Inställningar → Provision).
-  commission_plan: fixed
+  commission_plan: tiered
 check_in:
   interval_days: 7
   halve_risk_after_days: 3
