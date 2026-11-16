@@ -4,6 +4,17 @@ Viktiga beslut med motivering. Nyast överst.
 
 ## 2026-11-16
 
+### D27. Ekonomivyn: jämförelsen med indexfonden
+Indexfonden är S&P 500-ETF:n SPY tills Adam väljer en egen (`economics.index_fund_*` i
+config). Körslingan sparar dess stängningskurs och dagens växelkurs efter varje handelsdag,
+så jämförelsen görs i kronor från den dag Jarvis började följa kontot. Jarvis mäts med det
+tidsviktade indexet (insättningar och uttag räknas inte som resultat). Före 20 handelsdagar
+säger appen att det är för tidigt att dra slutsatser. Specen (§1.5) vill ha en tredje linje,
+"Jarvis före kostnader". Den är **inte byggd än**: courtaget sparas i aktiens valuta och
+behöver räknas om till kronor med kursen för varje affär. Tills dess visar appen courtaget
+per valuta som en egen rad, och PLAN.md har punkten kvar. ISK-skatten räknas bara när årets
+siffror från Skatteverket finns i config.
+
 ### D26. Fler daytrades per dag
 Adam: "du ska kunna köra flera day trades per dag" och "kör båda". (1) Universumet utökas
 från 20 till 50 stora, likvida amerikanska aktier i olika sektorer. (2) Samma aktie kan

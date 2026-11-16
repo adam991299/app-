@@ -348,7 +348,7 @@ async def test_entry_window_outside_sessions(store: Store) -> None:
 
 
 async def test_the_index_fund_close_is_recorded_after_the_close(store: Store) -> None:
-    runner, _sim, market, clock, _ = await make(store, AFTER)
+    runner, _sim, market, _clock, _ = await make(store, AFTER)
     await runner.start()
     spy = instrument("SPY", sector="index")
     runner._index_fund = spy

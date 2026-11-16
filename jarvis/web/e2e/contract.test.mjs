@@ -23,7 +23,7 @@ test("every contract model is mirrored with the same properties", () => {
 });
 
 test("the TypeScript interfaces declare exactly the mirrored keys", () => {
-  const interfaces = { StatusOut: "Status", ReasonOut: "Reason", MarketOut: "Market", PortfolioOut: "Portfolio", PositionOut: "Position", TradesOut: "Trades", TradeOut: "Trade", TodayOut: "Today", DaytradingOut: "Daytrading", DayTradeOut: "DayTrade" };
+  const interfaces = { StatusOut: "Status", ReasonOut: "Reason", MarketOut: "Market", PortfolioOut: "Portfolio", PositionOut: "Position", TradesOut: "Trades", TradeOut: "Trade", TodayOut: "Today", DaytradingOut: "Daytrading", DayTradeOut: "DayTrade", EconomicsOut: "Economics", CostOut: "Cost", ComparisonOut: "Comparison", ComparisonPointOut: "ComparisonPoint", AmountOut: "Amount" };
   for (const [model, name] of Object.entries(interfaces)) {
     const body = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(source)?.[1] ?? "";
     const declared = [...body.matchAll(/^\s+(\w+):/gm)].map((m) => m[1]);

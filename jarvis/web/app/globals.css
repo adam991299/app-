@@ -15,6 +15,9 @@
   --color-loss: #ff453a;
   --color-warning: #ffb340;
   --color-paper: #6cb6ff;
+  /* Chart series, validated for colour-blind separation on the surface (dataviz) */
+  --color-chart-jarvis: #1fa0bf;
+  --color-chart-index: #8b73f5;
   --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter",
     system-ui, sans-serif;
   --space-1: 8px;
@@ -401,4 +404,146 @@ ul {
 
 .facts .change {
   white-space: nowrap;
+}
+
+/* Economics chart */
+.chart {
+  margin: var(--space-2) 0 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font: var(--text-footnote);
+  color: var(--color-text-secondary);
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  vertical-align: middle;
+  border-radius: 1px;
+}
+
+.swatch[data-series="jarvis"],
+.marker[data-series="jarvis"] {
+  background: var(--color-chart-jarvis);
+  fill: var(--color-chart-jarvis);
+}
+
+.swatch[data-series="index"],
+.marker[data-series="index"] {
+  background: var(--color-chart-index);
+  fill: var(--color-chart-index);
+}
+
+.chart-area {
+  position: relative;
+}
+
+.chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: pan-y;
+}
+
+.series {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.series[data-series="jarvis"] {
+  stroke: var(--color-chart-jarvis);
+}
+
+.series[data-series="index"] {
+  stroke: var(--color-chart-index);
+}
+
+.marker {
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.grid {
+  stroke: var(--color-divider);
+  stroke-width: 1;
+}
+
+.grid.base {
+  stroke: var(--color-text-secondary);
+  stroke-opacity: 0.4;
+  stroke-dasharray: 3 4;
+}
+
+.crosshair {
+  stroke: var(--color-text-secondary);
+  stroke-width: 1;
+}
+
+.tick {
+  font: var(--text-caption);
+  fill: var(--color-text-secondary);
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  transform: translateX(8px);
+  background: var(--color-surface-raised);
+  border-radius: 12px;
+  padding: var(--space-1) 12px;
+  font: var(--text-footnote);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+}
+
+.tooltip[data-side="left"] {
+  transform: translateX(calc(-100% - 8px));
+}
+
+.table-view summary {
+  font: var(--text-footnote);
+  color: var(--color-glow-from);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.table-view table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--text-footnote);
+}
+
+.table-view th,
+.table-view td {
+  text-align: right;
+  padding: 6px 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.table-view th:first-child,
+.table-view td:first-child {
+  text-align: left;
+}
+
+.facts .row > :last-child {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tooltip {
+  font: var(--text-caption);
+  top: auto;
+  bottom: calc(100% + 4px);
 }

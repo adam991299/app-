@@ -18,14 +18,14 @@ async function open(browser, size, data, options = {}, path = "/") {
   await page.route("**/api/**", (route) => {
     const path = new URL(route.request().url()).pathname;
     if (data === null) return route.fulfill({ status: 503, body: "down" });
-    const body = { "/api/status": data.status, "/api/portfolio": data.portfolio, "/api/trades": data.trades, "/api/today": data.today, "/api/daytrading": data.daytrading ?? fx.daytradingEmpty }[path];
+    const body = { "/api/status": data.status, "/api/portfolio": data.portfolio, "/api/trades": data.trades, "/api/today": data.today, "/api/daytrading": data.daytrading ?? fx.daytradingEmpty, "/api/economics": data.economics ?? fx.economicsEmpty }[path];
     return route.fulfill({ json: body });
   });
   await page.goto(BASE + path);
   return page;
 }
 
-const full = { status: fx.status, portfolio: fx.portfolio, trades: fx.trades, today: fx.today, daytrading: fx.daytrading };
+const full = { status: fx.status, portfolio: fx.portfolio, trades: fx.trades, today: fx.today, daytrading: fx.daytrading, economics: fx.economics };
 const kill = { ...full, status: fx.killSwitch };
 const browser = await chromium.launch();
 
@@ -56,6 +56,26 @@ for (const [name, size] of Object.entries(SIZES)) {
   await page.getByText("Daytrading är avstängd tills strategin har klarat valideringen.").first().waitFor();
   await page.screenshot({ path: `${SHOTS}daytrading-empty-${name}.png`, fullPage: true });
 
+  // Economics: the honest comparison, costs and tax.
+  page = await open(browser, size, full);
+  await page.getByRole("link", { name: /procentenheter före/ }).click();
+  await page.getByRole("heading", { name: "Ekonomi" }).waitFor();
+  assert.match(await page.locator(".facts").first().innerText(), /▲ \+4,62\s%[\s\S]*▲ \+3,38\s%[\s\S]*\+1,24 procentenheter/);
+  assert.equal(await page.locator("path.series").count(), 2);
+  const box = await page.locator(".chart svg").boundingBox();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+  await page.locator(".tooltip").waitFor();
+  assert.match(await page.locator(".tooltip").innerText(), /Jarvis [+−]/);
+  await page.getByText("Break-even").waitFor();
+  await page.getByText("Jag gissar dem aldrig.").waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+  await page.screenshot({ path: `${SHOTS}economics-${name}.png`, fullPage: true });
+
+  page = await open(browser, size, { ...full, economics: fx.economicsEmpty }, {}, "/ekonomi");
+  await page.getByText("Grafen visas när jag har följt både kontot och indexfonden").waitFor();
+  await page.getByText("Inga avgifter ännu.").waitFor();
+  await page.screenshot({ path: `${SHOTS}economics-empty-${name}.png`, fullPage: true });
+
   page = await open(browser, size, fx.empty);
   await page.getByText("Jarvis väntar – marknaden stängd").waitFor();
   await page.getByText("Inga innehav just nu.").waitFor();
@@ -76,7 +96,7 @@ await page.getByText("Jag når inte servern just nu.").waitFor({ timeout: 20000 
 await page.unroute("**/api/**");
 await page.route("**/api/**", (route) => {
   const path = new URL(route.request().url()).pathname;
-  return route.fulfill({ json: { "/api/status": fx.status, "/api/portfolio": fx.portfolio, "/api/trades": fx.trades, "/api/today": fx.today, "/api/daytrading": fx.daytrading }[path] });
+  return route.fulfill({ json: { "/api/status": fx.status, "/api/portfolio": fx.portfolio, "/api/trades": fx.trades, "/api/today": fx.today, "/api/daytrading": fx.daytrading, "/api/economics": fx.economics }[path] });
 });
 await page.getByRole("button", { name: "Försök igen" }).click();
 await page.getByText("Jarvis handlar").waitFor();
@@ -88,4 +108,4 @@ assert.equal(await page.locator(".orb").getAttribute("data-tone"), "dimmed");
 assert.equal(await page.locator(".orb-core").evaluate((el) => getComputedStyle(el).animationName), "none");
 
 await browser.close();
-console.log("OK: home and day-trading states verified, screenshots saved");
+console.log("OK: home, day-trading and economics states verified, screenshots saved");

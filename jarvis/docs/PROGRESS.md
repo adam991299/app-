@@ -2,6 +2,17 @@
 
 Nyast överst. Varje post: vad som gjorts, hur det verifierats och vad som är nästa steg.
 
+## 2026-11-16 — Ekonomivyn (D27)
+
+- `GET /api/economics` och sidan `/ekonomi` (kort på hemskärmen): Jarvis mot indexfonden i
+  kronor med graf (hovring, tabellvy, färger kontrollerade för färgblindhet), ärligt omdöme,
+  fasta kostnader och break-even, ISK-skatt (bara med årets siffror), courtage hittills.
+- Körslingan sparar indexfondens stängning och växelkurs varje dag (migrering 0007).
+- Kvar enligt §1.5: linjen "Jarvis före kostnader" (D27), "Kan jag leva på det?"-kalkylatorn
+  i appen (modellen finns i `economics/living.py`).
+- 570 backend-tester gröna, 100 % i risk, mäklare, order och ekonomi; Playwright med
+  skärmdumpar `docs/screenshots/economics-*`.
+
 ## 2026-11-16 — Daytrading-vyn i appen
 
 - `GET /api/daytrading` och sidan `/daytrading` (kort på hemskärmen, detaljer ett tryck

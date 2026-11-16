@@ -115,6 +115,48 @@ export interface Daytrading {
   as_of: string;
 }
 
+export interface Cost {
+  name_sv: string;
+  monthly: string;
+}
+
+export interface ComparisonPoint {
+  day: string;
+  jarvis: string;
+  index: string;
+}
+
+export interface Comparison {
+  start: string;
+  days: number;
+  jarvis_pct: string;
+  index_pct: string;
+  difference_pct: string;
+  points: ComparisonPoint[];
+}
+
+export interface Amount {
+  amount: string;
+  currency: string;
+}
+
+export interface Economics {
+  base_currency: string;
+  capital: string | null;
+  monthly_costs: Cost[];
+  monthly_total: string;
+  break_even_pct: string | null;
+  break_even_warning: boolean;
+  break_even_limit_pct: number;
+  tax_drag_pct: string | null;
+  tax_sv: string;
+  index_name_sv: string;
+  verdict_sv: string;
+  comparison: Comparison | null;
+  commissions: Amount[];
+  as_of: string;
+}
+
 /** Property names per contract type, compared with the JSON Schema by `npm test`. */
 export const CONTRACT_KEYS = {
   StatusOut: ["mode", "trading_state", "reasons", "broker_connected", "markets", "briefing_sv", "as_of"],
@@ -135,6 +177,15 @@ export const CONTRACT_KEYS = {
     "status", "status_sv", "open_count", "max_open", "day_result", "base_currency",
     "losses_in_row", "max_daily_loss_pct", "pause_after_losses", "trades", "as_of",
   ],
+  EconomicsOut: [
+    "base_currency", "capital", "monthly_costs", "monthly_total", "break_even_pct",
+    "break_even_warning", "break_even_limit_pct", "tax_drag_pct", "tax_sv", "index_name_sv",
+    "verdict_sv", "comparison", "commissions", "as_of",
+  ],
+  CostOut: ["name_sv", "monthly"],
+  ComparisonOut: ["start", "days", "jarvis_pct", "index_pct", "difference_pct", "points"],
+  ComparisonPointOut: ["day", "jarvis", "index"],
+  AmountOut: ["amount", "currency"],
   DayTradeOut: [
     "id", "symbol", "currency", "quantity", "buy_price", "sell_price", "result", "is_open",
     "opened_at", "closed_at", "explanation_sv",
@@ -160,4 +211,5 @@ export const api = {
   trades: (limit: number) => get<Trades>(`/trades?limit=${limit}`),
   today: () => get<Today>("/today"),
   daytrading: () => get<Daytrading>("/daytrading"),
+  economics: () => get<Economics>("/economics"),
 };

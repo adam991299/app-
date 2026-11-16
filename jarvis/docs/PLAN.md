@@ -27,6 +27,9 @@ Fas 0 ──► Fas 0.5 (tunn version, pappershandlar ≥ 10 handelsdagar) ─�
 ```
 
 - [x] Ekonomimodulen (`economics/`): break-even, ISK-skatt från config (aldrig gissad), Monte Carlo "Kan jag leva på det?" med ojämn avkastning, buffert och uttagsregel; 100 % täckning. Vyn i appen kommer i Fas 6.
+- [x] Ekonomivyn i appen: jämförelse med indexfonden, break-even, ISK-skatt, courtage (D27).
+- [ ] Linjen "Jarvis före kostnader" (courtage omräknat till kronor per affär, D27).
+- [ ] "Kan jag leva på det?"-kalkylatorn i appen.
 
 **Byggs parallellt** (egna git worktrees, efter att de delade gränssnitten finns):
 nyhetsmotorn (4), politikersignaler (4.2), appens design och vyer (6), research-labbet (2),
