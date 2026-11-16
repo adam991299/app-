@@ -100,3 +100,14 @@ def test_plan_validation() -> None:
                 capital=1, monthly_need=1, expected_return_pct=5, volatility_pct=1, buffer_months=6
             )
         )
+
+
+def test_growth_with_monthly_deposits() -> None:
+    from jarvis.economics.living import grow
+
+    result = grow(80_000, 2_000, 5, expected_return_pct=8, volatility_pct=20, runs=500)
+    assert result.deposited == 80_000 + 2_000 * 60
+    assert result.low < result.median < result.high
+    assert 0 < result.below_deposits_pct < 50  # losing overall is possible, not likely
+    with pytest.raises(ValueError, match="negative"):
+        grow(-1, 0, 1, 5, 10)

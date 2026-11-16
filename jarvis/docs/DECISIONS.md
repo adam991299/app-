@@ -2,6 +2,20 @@
 
 Viktiga beslut med motivering. Nyast överst.
 
+## 2026-11-16
+
+### D23. Litet kapital och insättningar (Adams situation)
+Adam börjar med 10 000–80 000 kr och sätter in pengar då och då. Därför:
+- In- och uttag räknas inte som vinst eller förlust. Varje kontovärde sparas också som ett
+  tidsviktat index, och förlustgränserna och kill switch räknar på det. Registrera en
+  insättning med `python -m jarvis.store.flows 10000 "Insättning"` (i appen i Fas 6).
+- Kalkylen visar tillväxt med månadsinsättningar (`economics.living.grow`), inte uttag.
+- Med litet kapital blir minsta courtaget (cirka 10 kr per order) dyrt för små positioner;
+  kravet på förväntad vinst minst 2 × kostnaden stoppar affärer som inte lönar sig.
+- Adam vill ha högre risk, flera samtidiga affärer, krypto och daytrading. Det byggs
+  (riskläget Offensiv inom de tekniska taken, kryptofonder, daytrading-motor), men varje
+  strategi måste fortfarande klara valideringen innan den handlar.
+
 ## 2026-11-15
 
 ### D22. Rättelser efter granskningen av IBKR-kopplingen

@@ -87,3 +87,41 @@ def capital_needed(monthly_need: float, real_return_pct: float) -> float:
     if real_return_pct <= 0:
         raise ValueError("needs a positive return")
     return monthly_need * 12 / (real_return_pct / 100)
+
+
+@dataclass(frozen=True, slots=True)
+class Growth:
+    deposited: float  # start + all monthly deposits
+    low: float  # 10th percentile of the final value
+    median: float
+    high: float  # 90th percentile
+    below_deposits_pct: float  # simulations that end below what was put in
+
+
+def grow(
+    start: float,
+    monthly_deposit: float,
+    years: int,
+    expected_return_pct: float,
+    volatility_pct: float,
+    runs: int = 2000,
+    seed: int = 1,
+) -> Growth:
+    """Small capital with regular deposits: the range of outcomes, losing years included."""
+    if start < 0 or monthly_deposit < 0 or years < 1:
+        raise ValueError("amounts cannot be negative and the horizon is at least a year")
+    rng = random.Random(seed)  # noqa: S311 - reproducible planning, not security
+    mean, vol = expected_return_pct / 100, volatility_pct / 100
+    deposited = start + monthly_deposit * 12 * years
+    ends = []
+    for _ in range(runs):
+        value = start
+        for _year in range(years):
+            yearly = max(_yearly_return(rng, mean, vol), -0.99)
+            monthly = (1 + yearly) ** (1 / 12) - 1
+            for _month in range(12):
+                value = value * (1 + monthly) + monthly_deposit
+        ends.append(value)
+    ends.sort()
+    below = sum(end < deposited for end in ends) / runs * 100
+    return Growth(deposited, ends[runs // 10], ends[runs // 2], ends[runs * 9 // 10], below)
