@@ -271,6 +271,18 @@ DAYTRADING_SV = {
 
 
 def _daytrading_sv(payload: dict[str, Any]) -> str:
+    text = _daytrading_status_sv(payload)
+    skipped = payload.get("skipped_for_costs") or 0
+    if skipped:
+        word = "daytrade" if skipped == 1 else "daytrades"
+        text += (
+            f" I dag har jag avstått från {skipped} {word} eftersom avgifterna skulle äta upp "
+            "den förväntade vinsten."
+        )
+    return text
+
+
+def _daytrading_status_sv(payload: dict[str, Any]) -> str:
     status = payload["status"]
     if status == "losses_in_row":
         return (

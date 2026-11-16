@@ -423,3 +423,19 @@ async def test_without_capital_no_tax_is_computed(store: Store, clock: Clock) ->
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         body = (await c.get("/economics")).json()
     assert body["tax_sv"] == "Skatten räknas när jag vet hur stort kapitalet är."
+
+
+def test_daytrading_wording_counts_trades_skipped_for_costs() -> None:
+    from jarvis.api.views import _daytrading_sv
+
+    one = {
+        "status": "active",
+        "losses_in_row": 0,
+        "max_daily_loss_pct": 1.0,
+        "skipped_for_costs": 1,
+    }
+    assert _daytrading_sv(one) == (
+        "Jag letar efter utbrott. I dag har jag avstått från 1 daytrade eftersom avgifterna "
+        "skulle äta upp den förväntade vinsten."
+    )
+    assert "från 4 daytrades" in _daytrading_sv({**one, "skipped_for_costs": 4})

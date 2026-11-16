@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Literal
+
+CommissionPlan = Literal["fixed", "tiered"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +20,14 @@ class CostModel:
     half_spread_bps: float = 2.0  # large US caps
     impact_bps_at_1pct_adv: float = 10.0  # market impact grows with sqrt(participation)
     fx_bps: float = 2.0  # SEK<->USD conversion, each way
+
+    @classmethod
+    def for_plan(cls, plan: CommissionPlan) -> CostModel:
+        """IBKR Pro Fixed, or Tiered (0.0035 USD a share at the lowest volume tier plus about
+        0.0005 in exchange and clearing fees, at least about 0.40 USD an order). A21."""
+        if plan == "tiered":
+            return cls(commission_per_share=0.004, commission_min=0.40)
+        return cls()
 
     def commission(self, shares: float, price: float) -> float:
         if shares <= 0:

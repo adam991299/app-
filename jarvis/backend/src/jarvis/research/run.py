@@ -24,6 +24,7 @@ from typing import Any, Protocol
 from jarvis.config import load_settings_from_env
 from jarvis.config.settings import Validation
 from jarvis.domain import AssetClass, Instrument
+from jarvis.research.costs import CostModel
 from jarvis.research.orb_backtest import evaluate_orb
 from jarvis.research.validation import ValidationReport, report_sv, validate
 from jarvis.runner.daytrade import IntradaySource
@@ -61,6 +62,7 @@ async def run_validation(
     rules: Validation,
     clock: Callable[[], datetime],
     grid: Sequence[TrendParameters] = GRID,
+    costs: CostModel | None = None,
 ) -> tuple[ValidationReport[TrendParameters], str]:
     today: date = clock().date()
     series: dict[str, list[Bar]] = {}
@@ -78,6 +80,7 @@ async def run_validation(
         rules,
         benchmark=benchmark or None,
         earlier_trial_sharpes=await store.trial_sharpes(NAME),
+        costs=costs,
     )
     text = report_sv("Trendföljning", report) + (
         f"\n\nData: {len(series)} aktier, {HISTORY_YEARS} år dagsdata från IBKR."
@@ -95,6 +98,7 @@ async def run_orb_validation(
     clock: Callable[[], datetime],
     grid: Sequence[OrbParameters] = ORB_GRID,
     days: int = INTRADAY_DAYS,
+    costs: CostModel | None = None,
 ) -> tuple[ValidationReport[OrbParameters], str]:
     """Walk-forward over about a year of 5-minute bars: six months to choose, one month to
     judge, the last 20 % locked away (§6.3)."""
@@ -114,6 +118,7 @@ async def run_orb_validation(
         rules,
         benchmark=benchmark or None,
         earlier_trial_sharpes=await store.trial_sharpes(orb.NAME),
+        costs=costs,
         train_days=126,
         test_days=21,
         evaluator=evaluate_orb,
@@ -180,6 +185,7 @@ async def _main() -> int:  # pragma: no cover - needs a live gateway
             symbols=load_symbols(Path(env.get("JARVIS_UNIVERSE", str(DEFAULT_UNIVERSE)))),
             rules=settings.validation,
             clock=lambda: datetime.now(UTC),
+            costs=CostModel.for_plan(settings.economics.commission_plan),
         )
     finally:
         await broker.disconnect()

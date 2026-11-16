@@ -23,6 +23,7 @@ from jarvis.execution.engine import ExecutionEngine
 from jarvis.marketdata.ibkr import IbkrMarket
 from jarvis.markets.calendar import Exchange, session_at
 from jarvis.notify.email import EmailAlerts, FanOut, smtp_settings_from_env
+from jarvis.research.costs import CostModel
 from jarvis.runner.clock import ClockMonitor, ntp_measure
 from jarvis.runner.daytrade import DayTrader
 from jarvis.runner.loop import Runner
@@ -97,6 +98,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
         monitor = ClockMonitor(ntp_measure())
         instruments: dict[str, Instrument] = {}
         broker = IbkrBroker(ib, ibkr)
+        costs = CostModel.for_plan(settings.economics.commission_plan)
         engine = ExecutionEngine(
             broker=broker,
             store=store,
@@ -119,6 +121,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
             clock=clock,
             before_tick=monitor.refresh,
             risk=settings.risk,
+            costs=costs,
             index_fund=Instrument(
                 settings.economics.index_fund_symbol, "SMART", "USD", AssetClass.ETF, "index"
             ),
@@ -130,6 +133,7 @@ def create_execution_app(settings: Settings, env: Mapping[str, str]) -> FastAPI:
                 instruments=instruments,
                 clock=clock,
                 risk=settings.risk,
+                costs=costs,
             ),
         )
         stop = asyncio.Event()

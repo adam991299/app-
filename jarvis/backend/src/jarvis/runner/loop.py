@@ -28,6 +28,7 @@ from jarvis.research.costs import CostModel
 from jarvis.risk.profiles import apply_profile
 from jarvis.risk.sizing import size_position
 from jarvis.runner.daytrade import DayTrader, price_sv
+from jarvis.runner.selection import best_first, worth_it
 from jarvis.store.repo import Store
 from jarvis.strategy.bars import Bar
 from jarvis.strategy.trend import (
@@ -245,21 +246,39 @@ class Runner:
     async def enter_pending(self) -> None:
         """Send each queued setup once; whatever happens, it is not retried."""
         queued, self.pending = self.pending, []
+        candidates: list[tuple[EntrySignal, Pending]] = []
         for item in queued:
             try:
-                await self._enter(item)
+                signal = await self._signal(item)
+            except BrokerError:
+                logger.exception("could not size the entry for %s", item.instrument.symbol)
+                continue
+            if signal is None:
+                continue
+            if not worth_it(signal, self._risk):
+                logger.info("skipped %s: costs would eat the expected result", signal.signal_id)
+                continue
+            candidates.append((signal, item))
+        for _, item in best_first(candidates):  # the largest expected result after costs first
+            try:
+                fresh = await self._signal(item)  # sized with the cash left now
+                if fresh is None or not worth_it(fresh, self._risk):
+                    continue
+                result = await self._engine.submit_entry(fresh)
+                logger.info("entry %s: %s %s", fresh.signal_id, result.outcome, result.reasons)
             except BrokerError:
                 logger.exception("entry for %s failed", item.instrument.symbol)
 
-    async def _enter(self, item: Pending) -> None:
+    async def _signal(self, item: Pending) -> EntrySignal | None:
+        """The entry for a queued setup, sized with the account as it is now, or None."""
         instrument, setup = item.instrument, item.setup
         quote = await self._market.quote(instrument)
         if quote is None:
-            return
+            return None
         limit = round_down(quote.last * MARKETABLE)
         stop = setup.stop_price
         if limit <= stop:
-            return  # the price already fell through the planned stop
+            return None  # the price already fell through the planned stop
         account = await self._broker.account()
         reserve = (
             account.net_liquidation * Decimal(str(self._risk.portfolio.min_cash_reserve_pct)) / 100
@@ -275,30 +294,27 @@ class Runner:
             risk=risk,
         )
         if sized.quantity == 0:
-            return
+            return None
         risk_amount = sized.quantity * (limit - stop) * quote.fx_to_base
         round_trip = 2 * self._costs.total(sized.quantity, float(limit), 1e9)
         edge_text = f"{item.edge_r:.2f}".replace(".", ",")  # Swedish decimal comma
-        result = await self._engine.submit_entry(
-            EntrySignal(
-                signal_id=signal_id(instrument.symbol, setup),
-                strategy=NAME,
-                instrument=instrument,
-                quantity=sized.quantity,
-                limit_price=limit,
-                stop_price=stop,
-                expected_edge=Decimal(str(item.edge_r)) * risk_amount,
-                estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
-                explanation_sv=(
-                    f"Kursen stängde över sin högsta nivå på {item.params.entry_lookback} dagar "
-                    f"({price_sv(setup.channel_high)}). Stopp {price_sv(stop)}. "
-                    "Valideringen visar i snitt "
-                    f"{edge_text} gånger risken per affär."
-                ),
-                features={"channel_high": str(setup.channel_high), "atr": str(setup.atr)},
-            )
+        return EntrySignal(
+            signal_id=signal_id(instrument.symbol, setup),
+            strategy=NAME,
+            instrument=instrument,
+            quantity=sized.quantity,
+            limit_price=limit,
+            stop_price=stop,
+            expected_edge=Decimal(str(item.edge_r)) * risk_amount,
+            estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
+            explanation_sv=(
+                f"Kursen stängde över sin högsta nivå på {item.params.entry_lookback} dagar "
+                f"({price_sv(setup.channel_high)}). Stopp {price_sv(stop)}. "
+                "Valideringen visar i snitt "
+                f"{edge_text} gånger risken per affär."
+            ),
+            features={"channel_high": str(setup.channel_high), "atr": str(setup.atr)},
         )
-        logger.info("entry %s: %s %s", result.client_order_id, result.outcome, result.reasons)
 
     async def run(self, stop: asyncio.Event) -> None:
         """Never ends on an error: a failed start is retried, a failed tick is logged and the

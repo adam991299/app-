@@ -321,12 +321,12 @@ async def test_entry_is_skipped_without_quote_size_or_room(store: Store) -> None
     await runner.after_close(date(2026, 11, 16))
     item = runner.pending[0]
     market.prices.pop("AAPL")
-    await runner._enter(item)  # no quote
+    assert await runner._signal(item) is None  # no quote
     market.prices["AAPL"] = D(50)
-    await runner._enter(item)  # price already below the stop
+    assert await runner._signal(item) is None  # price already below the stop
     sim._cash = D(0)
     market.prices["AAPL"] = D(105)
-    await runner._enter(item)  # nothing to buy with
+    assert await runner._signal(item) is None  # nothing to buy with
     assert await store.order("trend:AAPL:2026-11-16") is None
 
 
@@ -358,3 +358,19 @@ async def test_the_index_fund_close_is_recorded_after_the_close(store: Store) ->
     del market.prices["SPY"]
     await runner.after_close(date(2026, 11, 17))  # no quote: nothing is invented
     assert len(await store.index_fund_values("SPY")) == 1
+
+
+async def test_a_setup_whose_costs_eat_the_result_is_not_sent(store: Store) -> None:
+    from jarvis.research.costs import CostModel
+
+    runner, sim, market, _clock, _ = await make(store, TUESDAY_LATER)
+    await runner.start()
+    await approve(store, edge_r=0.5)
+    market.history = bars_rising(date(2026, 11, 16))
+    await runner.after_close(date(2026, 11, 16))
+    runner._costs = CostModel(commission_min=10_000.0)
+    sim.set_price("AAPL", D(105))
+    market.prices["AAPL"] = D(105)
+    await runner.enter_pending()
+    assert await store.order("trend:AAPL:2026-11-16") is None
+    assert runner.pending == []

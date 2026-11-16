@@ -11,6 +11,7 @@ from jarvis.config.settings import Concurrency, Daytrading, Risk
 from jarvis.domain import Instrument, Quote
 from jarvis.domain.models import Account
 from jarvis.execution.engine import ExecutionEngine
+from jarvis.research.costs import CostModel
 from jarvis.risk.engine import MarketSession
 from jarvis.runner.daytrade import DayTrader
 from jarvis.store.repo import Store
@@ -21,6 +22,7 @@ D = Decimal
 # Monday 16 Nov 2026: NYSE opens 14:30 and closes 21:00 UTC
 OPEN = datetime(2026, 11, 16, 14, 30, tzinfo=UTC)
 FRESH = OPEN + timedelta(minutes=20, seconds=30)  # newest finished bar: 14:45-14:50
+START_CASH = Decimal(100000)
 SYMBOLS = {"AAPL": "technology", "XOM": "energy", "JNJ": "health"}
 
 
@@ -86,10 +88,14 @@ async def approve(store: Store, *, passed: bool = True, edge: float = 0.3) -> No
 
 
 async def make(
-    store: Store, now: datetime = FRESH, risk: Risk | None = None
+    store: Store,
+    now: datetime = FRESH,
+    risk: Risk | None = None,
+    costs: CostModel | None = None,
+    cash: Decimal = START_CASH,
 ) -> tuple[DayTrader, Broker, Market, Clock]:
     clock = Clock(now)
-    sim = Broker(cash=D(100000), clock=clock)
+    sim = Broker(cash=cash, clock=clock)
     for symbol in SYMBOLS:
         sim.set_price(symbol, D(102))
     market = Market(clock)
@@ -116,6 +122,7 @@ async def make(
         instruments=instruments,
         clock=clock,
         risk=rules,
+        costs=costs,
     )
     return trader, sim, market, clock
 
@@ -372,3 +379,54 @@ async def test_the_state_says_why_nothing_trades(store: Store) -> None:
     state = await store.strategy_state("orb")
     assert state is not None
     assert state[1]["status"] == "not_validated"
+
+
+async def test_the_trade_with_the_largest_expected_result_goes_first(store: Store) -> None:
+    """XOM's wider stop allows a larger risk within the limits: more expected profit."""
+    trader, sim, market, _ = await make(
+        store, risk=Risk(concurrency=Concurrency(max_concurrent_daytrades=1))
+    )
+    await approve(store)
+    market.prices["XOM"] = D(200)
+    sim.set_price("XOM", D(200))
+    await trader.tick()
+    assert await entries(store) == ["orb:XOM:2026-11-16"]
+
+
+async def test_trades_whose_costs_eat_the_result_are_skipped(store: Store) -> None:
+    trader, *_ = await make(store, costs=CostModel(commission_min=500.0))
+    await approve(store)
+    await trader.tick()
+    assert await entries(store) == []
+    state = await store.strategy_state("orb")
+    assert state is not None
+    assert state[1]["skipped_for_costs"] == len(SYMBOLS)
+
+
+async def test_stocks_the_budget_cannot_buy_are_not_followed(store: Store) -> None:
+    trader, _, market, clock = await make(store, now=FRESH + BAR, cash=D(500))
+    await approve(store)
+    await trader.tick()  # one share costs about 100: more than 10 % of 500
+    calls = market.calls
+    clock.now += BAR
+    await trader.tick()
+    assert market.calls == calls  # no more requests for stocks that cannot be bought today
+    clock.now += timedelta(days=1)
+    await trader.tick()  # a new day: prices are looked at again (the session is closed here)
+
+
+async def test_a_broker_error_while_sizing_skips_only_that_stock(store: Store) -> None:
+    trader, sim, _, _ = await make(store)
+    await approve(store)
+    original = sim.account
+    calls = {"n": 0}
+
+    async def flaky() -> Account:
+        calls["n"] += 1
+        if calls["n"] == 3:  # the first sizing call (after the limit checks)
+            raise BrokerError("busy")
+        return await original()
+
+    sim.account = flaky  # type: ignore[method-assign]
+    await trader.tick()
+    assert len(await entries(store)) == len(SYMBOLS) - 1

@@ -274,6 +274,8 @@ class Economics(_Section):
     # The index fund Jarvis must beat (§0 rule 7). A US-listed ETF, valued in SEK each day.
     index_fund_symbol: str = Field(default="SPY", min_length=1, max_length=12)
     index_fund_name_sv: str = Field(default="S&P 500-fonden (SPY)", min_length=1)
+    # Adam's commission plan at IBKR (Client Portal: Settings, Commission). D31.
+    commission_plan: Literal["fixed", "tiered"] = "fixed"
 
     @model_validator(mode="after")
     def _costs_are_not_negative(self) -> Self:

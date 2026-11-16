@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
@@ -27,6 +28,7 @@ from jarvis.markets.calendar import CalendarRangeError, Exchange, session_at
 from jarvis.research.costs import CostModel
 from jarvis.risk.profiles import apply_profile
 from jarvis.risk.sizing import size_position
+from jarvis.runner.selection import best_first, worth_it
 from jarvis.store.periods import day_start
 from jarvis.store.repo import Store
 from jarvis.strategy.orb import (
@@ -77,6 +79,9 @@ class DayTrader:
         self._costs = costs or CostModel()
         self._exchange = exchange
         self._checked: dict[str, datetime] = {}  # symbol -> end of the newest bar looked at
+        self._day: date | None = None
+        self._skipped = 0  # setups today whose costs would eat the expected result
+        self._share_price: dict[str, Decimal] = {}  # symbol -> one share today, base currency
 
     async def _open_day_trades(self) -> list[str]:
         """Entry ids of ORB brackets that still hold shares or still wait to be bought."""
@@ -116,6 +121,10 @@ class DayTrader:
             return
         if not await self._may_open_more(now):
             return
+        if self._day != now.date():
+            self._day, self._skipped, self._share_price = now.date(), 0, {}
+        max_position = await self._max_position_base(now)
+        found: list[tuple[EntrySignal, _Setup]] = []
         for symbol, instrument in self._instruments.items():
             signal_id, after = await self._next_signal(symbol, now)
             if signal_id is None:
@@ -123,18 +132,42 @@ class DayTrader:
             newest_end = opens + ((now - opens) // BAR) * BAR
             if self._checked.get(symbol) == newest_end:
                 continue  # no new 5-minute bar since the last look (IBKR pacing limits)
+            if self._share_price.get(symbol, Decimal(0)) > max_position:
+                continue  # not even one share fits in the budget today (D31)
             self._checked[symbol] = newest_end
             bars = await self._market.intraday_bars(instrument, now=now)
             todays = [b for b in bars if b.at >= opens]
+            fx = await self._fx_to_base(instrument.currency)
+            if todays and fx is not None:
+                self._share_price[symbol] = todays[-1].close * fx
             setup = setup_for(todays, closes, params, after)
             if setup is None or setup.signal_at + BAR < newest_end:
                 continue  # no breakout, or it happened earlier and the move is no longer fresh
+            plan = _Setup(signal_id, instrument, setup, bool(after))
             try:
-                await self._enter(signal_id, instrument, setup, params, edge_r, again=bool(after))
+                signal = await self._signal(plan, params, edge_r)
             except BrokerError:
-                logger.exception("day-trade entry for %s failed", symbol)
+                logger.exception("could not size the day trade for %s", symbol)
+                continue
+            if signal is None:
+                continue
+            if not worth_it(signal, self._risk):
+                self._skipped += 1  # the costs would eat the expected result
+                continue
+            found.append((signal, plan))
+        for _, plan in best_first(found):  # the largest expected result after costs first
+            try:
+                fresh = await self._signal(plan, params, edge_r)  # sized with the cash left now
+                if fresh is None or not worth_it(fresh, self._risk):
+                    continue
+                result = await self._engine.submit_entry(fresh)
+                logger.info("day trade %s: %s %s", fresh.signal_id, result.outcome, result.reasons)
+            except BrokerError:
+                logger.exception("day-trade entry for %s failed", plan.instrument.symbol)
             if not await self._may_open_more(now):
                 return
+        if self._skipped:
+            await self._may_open_more(now)  # publish how many were skipped for costs
 
     async def _next_signal(self, symbol: str, now: datetime) -> tuple[str | None, datetime | None]:
         """The id for the symbol's next day trade today and when its previous one ended, or
@@ -218,27 +251,34 @@ class DayTrader:
                 "losses_in_row": losses_in_row,
                 "max_daily_loss_pct": limits.max_daily_loss_pct,
                 "pause_after_losses": limits.pause_after_consecutive_losses,
+                "skipped_for_costs": self._skipped,
             },
             at=now,
         )
 
-    async def _enter(
-        self,
-        signal_id: str,
-        instrument: Instrument,
-        setup: OrbSetup,
-        params: OrbParameters,
-        edge_r: float,
-        *,
-        again: bool,
-    ) -> None:
+    async def _max_position_base(self, now: datetime) -> Decimal:
+        """The largest position the budget allows in one stock, in the base currency
+        (infinite when the account cannot be read: the risk engine decides then)."""
+        try:
+            account = await self._broker.account()
+        except BrokerError:
+            return Decimal("Infinity")
+        risk = apply_profile(self._risk, await self._store.risk_profile(now))
+        managed = account.net_liquidation * await self._store.budget_pct(now) / 100
+        return managed * Decimal(str(risk.portfolio.max_position_pct)) / 100
+
+    async def _signal(
+        self, plan: _Setup, params: OrbParameters, edge_r: float
+    ) -> EntrySignal | None:
+        """The entry for a setup, sized with the account as it is now, or None."""
+        instrument, setup = plan.instrument, plan.setup
         quote = await self._market.quote(instrument)
         if quote is None:
-            return
+            return None
         limit = round_down(quote.last * MARKETABLE)
         stop = setup.range_low
         if limit <= stop:
-            return
+            return None
         account = await self._broker.account()
         risk = apply_profile(self._risk, await self._store.risk_profile(self._clock()))
         reserve = account.net_liquidation * Decimal(str(risk.portfolio.min_cash_reserve_pct)) / 100
@@ -252,32 +292,36 @@ class DayTrader:
             risk=risk,
         )
         if sized.quantity == 0:
-            return
+            return None
         risk_amount = sized.quantity * (limit - stop) * quote.fx_to_base
         round_trip = 2 * self._costs.total(sized.quantity, float(limit), 1e9)
-        result = await self._engine.submit_entry(
-            EntrySignal(
-                signal_id=signal_id,
-                strategy=NAME,
-                instrument=instrument,
-                quantity=sized.quantity,
-                limit_price=limit,
-                stop_price=stop,
-                take_profit_price=setup.target(limit, params),
-                expected_edge=Decimal(str(edge_r)) * risk_amount,
-                estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
-                explanation_sv=(
-                    "Daytrade igen: kursen bröt över dagens högsta nivå "
-                    f"({price_sv(setup.level)}). "
-                    if again
-                    else f"Daytrade: kursen bröt över de första {params.range_minutes} "
-                    f"minuternas högsta nivå ({price_sv(setup.level)}). "
-                )
-                + f"Stopp vid öppningsintervallets lägsta nivå {price_sv(stop)}.",
-                features={"level": str(setup.level), "range_low": str(stop)},
+        return EntrySignal(
+            signal_id=plan.signal_id,
+            strategy=NAME,
+            instrument=instrument,
+            quantity=sized.quantity,
+            limit_price=limit,
+            stop_price=stop,
+            take_profit_price=setup.target(limit, params),
+            expected_edge=Decimal(str(edge_r)) * risk_amount,
+            estimated_cost=Decimal(str(round_trip)) * quote.fx_to_base,
+            explanation_sv=(
+                f"Daytrade igen: kursen bröt över dagens högsta nivå ({price_sv(setup.level)}). "
+                if plan.again
+                else f"Daytrade: kursen bröt över de första {params.range_minutes} "
+                f"minuternas högsta nivå ({price_sv(setup.level)}). "
             )
+            + f"Stopp vid öppningsintervallets lägsta nivå {price_sv(stop)}.",
+            features={"level": str(setup.level), "range_low": str(stop)},
         )
-        logger.info("day trade %s: %s %s", signal_id, result.outcome, result.reasons)
+
+
+@dataclass(frozen=True, slots=True)
+class _Setup:
+    signal_id: str
+    instrument: Instrument
+    setup: OrbSetup
+    again: bool
 
 
 class Status(StrEnum):

@@ -105,6 +105,7 @@ def test_every_default_is_the_number_in_the_spec() -> None:
             },
             "index_fund_symbol": "SPY",
             "index_fund_name_sv": "S&P 500-fonden (SPY)",
+            "commission_plan": "fixed",
         },
         "check_in": {"interval_days": 7, "halve_risk_after_days": 3, "wind_down_after_days": 7},
         "project_stop_rules": {  # §16
