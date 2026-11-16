@@ -17,6 +17,7 @@ Guarantees:
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from collections.abc import Awaitable, Callable, Mapping
@@ -62,6 +63,7 @@ logger = logging.getLogger(__name__)
 
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,100}$")
 FILL_LOOKBACK = timedelta(days=7)
+MAX_EXIT_ATTEMPTS = 5
 
 
 class Outcome(StrEnum):
@@ -72,6 +74,8 @@ class Outcome(StrEnum):
     BROKER_UNAVAILABLE = "broker_unavailable"
     STOP_RAISED = "stop_raised"
     STOP_UNCHANGED = "stop_unchanged"
+    NOTHING_TO_CLOSE = "nothing_to_close"
+    EXIT_SENT = "exit_sent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +355,112 @@ class ExecutionEngine:
             )
 
     # -- exits: raising the stop ------------------------------------------------------------
+
+    async def close_position(self, entry_id: str, explanation_sv: str) -> Result:
+        """Sell what a bracket still holds, now (e.g. day trades before the close).
+
+        Order of steps keeps the position protected as long as possible: the price and the
+        risk check come first; only then are the broker-side stop and target cancelled and
+        the sell sent. If the sell fails after that, reconciliation reports the position as
+        unprotected (halt and alert) and the caller tries again.
+        """
+        now = self._clock()
+        entry = await self._store.order(entry_id)
+        exit_id = f"{entry_id}.exit"
+        sold_by_exits = 0
+        for attempt in range(1, MAX_EXIT_ATTEMPTS + 1):
+            exit_id = f"{entry_id}.exit{attempt}"
+            earlier = await self._store.order(exit_id)
+            if earlier is None:
+                break
+            sold_by_exits += earlier.filled_quantity
+            if not earlier.status.is_terminal:
+                return Result(Outcome.NOTHING_TO_CLOSE, exit_id, detail="a sell is already working")
+        else:
+            await self._problem(
+                f"exit-attempts:{entry_id}",
+                f"Jag har försökt sälja {entry_id} {MAX_EXIT_ATTEMPTS} gånger utan att lyckas.",
+            )
+            return Result(Outcome.REJECTED_BY_BROKER, exit_id, detail="too many attempts")
+        if entry is None:
+            return Result(Outcome.NOTHING_TO_CLOSE, exit_id, detail="no such position")
+        instrument = self._instruments.get(entry.symbol)
+        try:
+            children = [
+                view
+                for child_id in (f"{entry_id}.stop", f"{entry_id}.tp")
+                if (view := await self._call(self._broker.order(child_id))) is not None
+            ]
+            parent = await self._call(self._broker.order(entry_id))
+        except BrokerError as exc:
+            return Result(Outcome.BROKER_UNAVAILABLE, exit_id, detail=str(exc))
+        bought = parent.filled_quantity if parent else 0
+        held = bought - sum(c.filled_quantity for c in children) - sold_by_exits
+        quote = await self._quotes(instrument) if instrument is not None else None
+        if held <= 0 or instrument is None:
+            return Result(Outcome.NOTHING_TO_CLOSE, exit_id, detail="nothing left to sell")
+        if quote is None:
+            return Result(Outcome.REJECTED_BY_RISK, exit_id, (Reason.MISSING_QUOTE,))
+        limit = round_down(quote.last * Decimal("0.997"))  # marketable: a little under the price
+        proposal = OrderProposal(
+            instrument=instrument,
+            side=Side.SELL,
+            quantity=held,
+            limit_price=limit,
+            estimated_cost=Decimal(0),
+        )
+        try:
+            context = await self._context(now, instrument)
+        except (BrokerError, UnknownInstrumentError) as exc:
+            return Result(Outcome.BROKER_UNAVAILABLE, exit_id, detail=str(exc))
+        # Judge the sell as it will be once this bracket's own stop is gone.
+        own = sum(c.quantity - c.filled_quantity for c in children if c.stop_price is not None)
+        protected = dict(context.protected)
+        protected[instrument.symbol] = max(protected.get(instrument.symbol, 0) - own, 0)
+        decision = RiskEngine(self._risk).check(
+            proposal, dataclasses.replace(context, protected=protected)
+        )
+        await self._store.record_risk_decision(
+            at=now,
+            client_order_id=exit_id,
+            symbol=instrument.symbol,
+            side=Side.SELL.value,
+            quantity=held,
+            approved=decision.approved,
+            reasons=[r.value for r in decision.reasons],
+            trading_state=context.breakers.state.value,
+        )
+        if not decision.approved:
+            return Result(Outcome.REJECTED_BY_RISK, exit_id, decision.reasons)
+        try:
+            for child in children:
+                if child.status.is_working:
+                    await self._apply(
+                        await self._call(self._broker.cancel(child.client_order_id)), now
+                    )
+            await self._store.add_order(
+                NewOrder(
+                    client_order_id=exit_id,
+                    kind="exit",
+                    symbol=instrument.symbol,
+                    side=Side.SELL.value,
+                    quantity=held,
+                    limit_price=limit,
+                    stop_price=None,
+                    strategy=entry.strategy,
+                    explanation_sv=explanation_sv,
+                    currency=instrument.currency,
+                ),
+                at=now,
+            )
+            request = OrderRequest(exit_id, instrument, Side.SELL, held, limit)
+            view = await self._call(self._broker.submit(request))
+        except BrokerError as exc:
+            return Result(Outcome.BROKER_UNAVAILABLE, exit_id, detail=str(exc))
+        await self._apply(view, now)
+        if view.status is OrderStatus.REJECTED:
+            return Result(Outcome.REJECTED_BY_BROKER, exit_id, detail=view.reject_reason)
+        return Result(Outcome.EXIT_SENT, exit_id)
 
     async def raise_stop(self, entry_id: str, new_stop: Decimal) -> Result:
         """Move a bracket's stop up (trailing exit). Never down, never through the price."""

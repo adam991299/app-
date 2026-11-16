@@ -689,3 +689,106 @@ async def test_the_offensive_level_allows_a_larger_position(world: World) -> Non
     world.price("AAPL", "100")
     result = await world.engine.submit_entry(signal("big2", quantity=150, stop_price=D(99)))
     assert Reason.POSITION_LIMIT not in result.reasons
+
+
+# -- closing a position now ------------------------------------------------------------------
+
+
+async def test_close_position_cancels_the_stop_and_sells(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal(take_profit_price=D(120)))).client_order_id
+    result = await world.engine.close_position(cid, "Stängd före börsens slut.")
+    assert (result.outcome, result.client_order_id) == (Outcome.EXIT_SENT, f"{cid}.exit1")
+    assert await status_of(world.store, f"{cid}.stop") is OrderStatus.CANCELLED
+    assert await status_of(world.store, f"{cid}.tp") is OrderStatus.CANCELLED
+    assert await world.engine.reconcile()
+    assert await world.store.booked_positions() == {}
+    again = await world.engine.close_position(cid, "x")
+    assert again.outcome is Outcome.NOTHING_TO_CLOSE
+
+
+async def test_close_position_without_quote_leaves_the_stop_in_place(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.prices.pop("AAPL")
+    result = await world.engine.close_position(cid, "x")
+    assert result.reasons == (Reason.MISSING_QUOTE,)
+    assert await status_of(world.store, f"{cid}.stop") is OrderStatus.SUBMITTED
+
+
+async def test_close_position_refused_by_risk_keeps_the_stop(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.engine._reconciled = False  # books do not match the broker: trading is halted
+    result = await world.engine.close_position(cid, "x")
+    assert result.outcome is Outcome.REJECTED_BY_RISK
+    assert await status_of(world.store, f"{cid}.stop") is OrderStatus.SUBMITTED
+
+
+async def test_close_position_edge_cases(world: World) -> None:
+    assert (await world.engine.close_position("ghost", "x")).outcome is Outcome.NOTHING_TO_CLOSE
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.price("AAPL", "94")  # the stop already sold everything
+    assert (await world.engine.close_position(cid, "x")).outcome is Outcome.NOTHING_TO_CLOSE
+    other = (await world.engine.submit_entry(signal("second"))).client_order_id
+    world.engine._instruments = {}
+    assert (await world.engine.close_position(other, "x")).outcome is Outcome.NOTHING_TO_CLOSE
+
+
+async def test_close_position_reports_outages(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.sim.fail_next_call(BrokerUnavailableError("down"))
+    assert (await world.engine.close_position(cid, "x")).outcome is Outcome.BROKER_UNAVAILABLE
+    world.sim.fail_submit = True
+    failed = await world.engine.close_position(cid, "x")
+    assert failed.outcome is Outcome.BROKER_UNAVAILABLE
+    assert not await world.engine.reconcile()  # the stop is gone: halt and alert
+    assert any("saknar fullt skydd" in m for _, m in world.alerts.sent)
+
+
+async def test_unknown_holding_blocks_closing_context(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.price("MSFT", "50")
+    await world.sim.submit(OrderRequest("m", MSFT, Side.BUY, 1, D(50), D(45)))
+    result = await world.engine.close_position(cid, "x")
+    assert result.outcome is Outcome.BROKER_UNAVAILABLE
+
+
+async def test_a_working_exit_is_not_doubled_and_retries_get_new_ids(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    world.sim.set_price("AAPL", D(100))
+    world.prices["AAPL"] = D("1000")  # limit far above the market: the sell rests
+    await world.engine.close_position(cid, "x")
+    world.prices["AAPL"] = D(100)
+    busy = await world.engine.close_position(cid, "x")
+    assert busy.detail == "a sell is already working"
+    await world.sim.cancel(f"{cid}.exit1")
+    await world.engine.reconcile()
+    retry = await world.engine.close_position(cid, "x")
+    assert retry.client_order_id == f"{cid}.exit2"
+
+
+async def test_exit_rejected_by_the_broker_and_too_many_attempts(world: World) -> None:
+    cid = (await world.engine.submit_entry(signal())).client_order_id
+    original = world.sim.submit
+
+    async def reject(request: OrderRequest) -> BrokerOrder:
+        if request.stop_price is not None:
+            return await original(request)
+        return BrokerOrder(
+            request.client_order_id,
+            "AAPL",
+            Side.SELL,
+            request.quantity,
+            OrderStatus.REJECTED,
+            0,
+            None,
+            limit_price=request.limit_price,
+            reject_reason="no",
+        )
+
+    world.sim.submit = reject  # type: ignore[method-assign]
+    for attempt in range(1, 6):
+        result = await world.engine.close_position(cid, "x")
+        assert result.outcome is Outcome.REJECTED_BY_BROKER
+        assert result.client_order_id == f"{cid}.exit{attempt}"
+    final = await world.engine.close_position(cid, "x")
+    assert final.detail == "too many attempts"
+    assert any("5 gånger" in m for _, m in world.alerts.sent)
