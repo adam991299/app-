@@ -8,12 +8,10 @@ flyttas då till "Verifierat" med datum och källa.
 
 | # | Antagande | Verifieras i |
 |---|---|---|
-| A1 | ISK finns hos IBKR Ireland för svenska privatpersoner, och vilka begränsningar kontot har (blankning, belåning, derivat, terminer, krypto). | Fas 0.5, tillsammans med Adam |
 | A2 | Att `ghcr.io/gnzsnz/ib-gateway:stable` släpper in API-anslutningar från andra containrar på port **4004** i pappersläge (via socat). Exemplen i projektet visar 4003/4004, men vilken som är papper är inte bekräftat. Fel port syns direkt som "IB Gateway not reachable" i loggen; då byts `JARVIS_IBKR_PORT` till 4003. | Första starten på servern |
 | A3 | IBKR:s gräns för samtidiga realtidsrader (specen anger "vanligtvis 100") och priserna på datapaket. | Fas 1 |
 | A4 | IBKR:s regler för historikhämtning (pacing). Daytradingen hämtar 5-minutersdata för 50 aktier var femte minut (100 anrop per 10 minuter); att det inte stryps behöver provas mot papperskontot. | Första dagen i papper |
 | A5 | Vilka ETF:er en EU-privatperson får köpa (PRIIPs/KID). | Fas 1 |
-| A6 | PDT-regler för amerikanska aktier på Adams kontotyp, och om ett ISK hos IBKR är ett kontantkonto där pengar från en försäljning samma dag inte får användas till nya köp förrän de är likvida (T+1). Då begränsas antalet daytrades per dag av kassan. | Innan daytrading i papper |
 | A7 | Aktuella Claude-modellnamn och priser för nyhetsanalys och chatt. | Fas 4 |
 | A8 | Villkor och robots.txt för varje nyhetskälla, samt SEC EDGAR:s rate limits. | Fas 4 |
 | A9 | Format och villkor för Senatens eFD och representanthusets Clerk. | Fas 4.2 |
@@ -56,3 +54,8 @@ flyttas då till "Verifierat" med datum och källa.
 - **Redis saknar lösenord och containrarna saknar extra härdning** (`cap_drop`,
   `no-new-privileges`, skrivskyddat filsystem). Redis nås bara på det interna nätverket.
   Härdningen görs i Fas 7.
+
+## Verifierat 2026-11-16 (Adams Client Portal)
+- A1/A6: kontot är ett **ISK**, kontotyp **Cash** (ingen belåning eller blankning), prismodell
+  **IBKR Pro: Stocks: Tiered**, papperskonto finns. Kontantkontot gör att Jarvis bara köper för
+  likvida pengar (T+1), vilket redan är byggt. PDT-reglerna gäller marginalkonton, inte detta.
