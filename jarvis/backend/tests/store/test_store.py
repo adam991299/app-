@@ -340,3 +340,32 @@ async def test_trials_are_kept_and_validations_ordered(store: Store) -> None:
         at=NOW + timedelta(days=1),
     )
     assert await store.latest_validation("trend") == (True, 0.4, {"entry_lookback": 55}, "Klarade.")
+
+
+async def test_deposits_and_withdrawals_are_not_profit_or_loss(store: Store) -> None:
+    await snap(store, NOW - timedelta(hours=3), "10000")
+    await store.record_cash_flow(D(70000), at=NOW - timedelta(hours=2), note="insättning")
+    await snap(store, NOW - timedelta(hours=1), "80000")  # deposit only: no gain
+    await snap(store, NOW - timedelta(minutes=30), "88000")  # +10 % from trading
+    await store.record_cash_flow(D(-40000), at=NOW - timedelta(minutes=10), note="uttag")
+    await snap(store, NOW, "48000")  # withdrawal only: no loss
+    marks = await store.equity_marks(NOW)
+    assert marks is not None
+    assert marks.day_start == D(10000)
+    assert marks.current == D(11000)  # +10 %, deposits and withdrawals removed
+    assert marks.day_low == D(10000)
+    assert marks.peak == D(11000)
+    assert ("adam", "cash_flow", {"amount": "-40000", "note": "uttag"}) in (
+        await store.audit_entries()
+    )
+
+
+async def test_emptied_account_keeps_the_index_and_zero_flow_is_refused(store: Store) -> None:
+    await snap(store, NOW - timedelta(hours=1), "10000")
+    await store.record_cash_flow(D(5000), at=NOW - timedelta(minutes=30), note="insättning")
+    await snap(store, NOW, "0.01")  # everything lost after a deposit: no measurable index
+    marks = await store.equity_marks(NOW)
+    assert marks is not None
+    assert marks.current == D(10000)
+    with pytest.raises(ValueError, match="zero"):
+        await store.record_cash_flow(D(0), at=NOW, note="x")

@@ -20,6 +20,7 @@ from jarvis.store.periods import day_start, week_start
 from jarvis.store.tables import (
     AccountState,
     AuditEntry,
+    CashFlow,
     Controls,
     EquitySnapshot,
     FillRow,
@@ -177,8 +178,51 @@ class Store:
     # -- equity ------------------------------------------------------------------------
 
     async def record_equity(self, *, at: datetime, net_liquidation: Decimal, cash: Decimal) -> None:
+        """``adjusted`` is a time-weighted index: it moves only with trading results. Each
+        snapshot changes it by the account's growth since the previous snapshot, after
+        removing deposits and withdrawals made in between."""
         async with self._sessions.begin() as session:
-            session.add(EquitySnapshot(at=at, net_liquidation=net_liquidation, cash=cash))
+            previous = await session.scalar(
+                select(EquitySnapshot)
+                .where(EquitySnapshot.at <= at)
+                .order_by(EquitySnapshot.at.desc(), EquitySnapshot.id.desc())
+                .limit(1)
+            )
+            adjusted = net_liquidation
+            if previous is not None and previous.net_liquidation > 0:
+                flows = await session.scalar(
+                    select(func.coalesce(func.sum(CashFlow.amount), 0)).where(
+                        CashFlow.at > previous.at, CashFlow.at <= at
+                    )
+                )
+                grown = net_liquidation - Decimal(flows or 0)
+                # an emptied account has no trading result to measure: keep the index
+                adjusted = (
+                    previous.adjusted * grown / previous.net_liquidation
+                    if grown > 0
+                    else previous.adjusted
+                )
+            session.add(
+                EquitySnapshot(at=at, net_liquidation=net_liquidation, cash=cash, adjusted=adjusted)
+            )
+
+    async def record_cash_flow(
+        self, amount: Decimal, *, at: datetime, note: str, actor: str = "adam"
+    ) -> None:
+        """Register a deposit (+) or withdrawal (-) so the loss limits do not see it as
+        trading. Register it when it is made: snapshots before it are not changed."""
+        if amount == 0:
+            raise ValueError("a cash flow cannot be zero")
+        async with self._sessions.begin() as session:
+            session.add(CashFlow(at=at, amount=amount, note=note))
+            session.add(
+                AuditEntry(
+                    at=at,
+                    actor=actor,
+                    action="cash_flow",
+                    details={"amount": str(amount), "note": note},
+                )
+            )
 
     async def equity_marks(self, now: datetime) -> EquityMarks | None:
         """The circuit breakers' reference values, or None before the first snapshot."""
@@ -189,9 +233,7 @@ class Store:
             controls = await session.get_one(Controls, 1)
             day_ref, day_low = await _period(session, day_start(now), now, current)
             week_ref, week_low = await _period(session, week_start(now), now, current)
-            peak_query = select(func.max(EquitySnapshot.net_liquidation)).where(
-                EquitySnapshot.at <= now
-            )
+            peak_query = select(func.max(EquitySnapshot.adjusted)).where(EquitySnapshot.at <= now)
             if controls.peak_reset_at is not None:
                 peak_query = peak_query.where(EquitySnapshot.at >= controls.peak_reset_at)
             peak = (await session.scalar(peak_query)) or current
@@ -502,7 +544,7 @@ async def _latest_before(
 ) -> Decimal | None:
     condition = EquitySnapshot.at <= moment if inclusive else EquitySnapshot.at < moment
     value: Decimal | None = await session.scalar(
-        select(EquitySnapshot.net_liquidation)
+        select(EquitySnapshot.adjusted)
         .where(condition)
         .order_by(EquitySnapshot.at.desc(), EquitySnapshot.id.desc())
         .limit(1)
@@ -518,13 +560,13 @@ async def _period(
     reference = await _latest_before(session, start, inclusive=False)
     if reference is None:
         reference = await session.scalar(
-            select(EquitySnapshot.net_liquidation)
+            select(EquitySnapshot.adjusted)
             .where(EquitySnapshot.at >= start, EquitySnapshot.at <= now)
             .order_by(EquitySnapshot.at, EquitySnapshot.id)
             .limit(1)
         )
     low = await session.scalar(
-        select(func.min(EquitySnapshot.net_liquidation)).where(
+        select(func.min(EquitySnapshot.adjusted)).where(
             EquitySnapshot.at >= start, EquitySnapshot.at <= now
         )
     )

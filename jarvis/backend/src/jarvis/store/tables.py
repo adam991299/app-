@@ -57,6 +57,8 @@ class EquitySnapshot(Base):
     at: Mapped[datetime] = mapped_column(UTC_TIME, index=True)
     net_liquidation: Mapped[Decimal] = mapped_column(MONEY)
     cash: Mapped[Decimal] = mapped_column(MONEY)
+    # net_liquidation minus all deposits/withdrawals so far: what trading alone produced
+    adjusted: Mapped[Decimal] = mapped_column(MONEY)
 
 
 class AuditEntry(Base):
@@ -182,3 +184,14 @@ class ValidationRow(Base):
     passed: Mapped[bool] = mapped_column(Boolean)
     edge_r: Mapped[float] = mapped_column(Float)
     report_sv: Mapped[str] = mapped_column(Text)
+
+
+class CashFlow(Base):
+    """A deposit (positive) or withdrawal (negative). Not profit or loss."""
+
+    __tablename__ = "cash_flows"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    at: Mapped[datetime] = mapped_column(UTC_TIME, index=True)
+    amount: Mapped[Decimal] = mapped_column(MONEY)
+    note: Mapped[str] = mapped_column(Text)
