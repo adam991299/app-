@@ -54,6 +54,8 @@ services:
     command: [--name, api]
     environment:
       JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:${POSTGRES_PASSWORD}@db/jarvis
+      JARVIS_DOMAIN: ${JARVIS_DOMAIN:-localhost}
+      JARVIS_PASSKEY_SETUP_CODE: ${JARVIS_PASSKEY_SETUP_CODE:-}
   broker-service:
     <<: *backend
     command: [--name, broker-service]

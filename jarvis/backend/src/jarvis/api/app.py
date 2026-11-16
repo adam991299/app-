@@ -11,6 +11,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, Query
 
+from jarvis.api.auth import AuthConfig, create_auth_router
 from jarvis.api.schemas import (
     DaytradingOut,
     EconomicsOut,
@@ -23,11 +24,19 @@ from jarvis.api.views import Views
 from jarvis.config.settings import Settings
 from jarvis.service.app import create_app
 from jarvis.service.names import ServiceName
+from jarvis.store.auth import AuthStore
 from jarvis.store.repo import Store
 
 
-def create_api_app(store: Store, settings: Settings, clock: Callable[[], datetime]) -> FastAPI:
+def create_api_app(
+    store: Store,
+    settings: Settings,
+    clock: Callable[[], datetime],
+    auth: tuple[AuthStore, AuthConfig] | None = None,
+) -> FastAPI:
     app = create_app(ServiceName.API)
+    if auth is not None:
+        app.include_router(create_auth_router(auth[0], store, auth[1], clock))
     views = Views(store, settings, clock)
 
     @app.get("/status")

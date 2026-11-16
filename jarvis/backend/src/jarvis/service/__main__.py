@@ -13,11 +13,13 @@ import uvicorn
 from fastapi import FastAPI
 
 from jarvis.api.app import create_api_app
+from jarvis.api.auth import auth_config_from_env
 from jarvis.config import ConfigError, Settings, load_settings_from_env
 from jarvis.runner.service import create_execution_app
 from jarvis.service.app import create_app
 from jarvis.service.logging import configure_logging
 from jarvis.service.names import ServiceName
+from jarvis.store.auth import AuthStore
 from jarvis.store.db import DatabaseConfigError, create_engine, database_url_from_env
 from jarvis.store.migrate import migrate
 from jarvis.store.repo import Store
@@ -58,7 +60,9 @@ def build_app(service: ServiceName, settings: Settings) -> FastAPI:
         return create_app(service)
     url = database_url_from_env()
     migrate(url)
-    return create_api_app(Store(create_engine(url)), settings, lambda: datetime.now(UTC))
+    engine = create_engine(url)
+    auth = (AuthStore(engine), auth_config_from_env(os.environ))
+    return create_api_app(Store(engine), settings, lambda: datetime.now(UTC), auth)
 
 
 if __name__ == "__main__":

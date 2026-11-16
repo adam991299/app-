@@ -15,6 +15,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -223,3 +224,36 @@ class CashFlow(Base):
     at: Mapped[datetime] = mapped_column(UTC_TIME, index=True)
     amount: Mapped[Decimal] = mapped_column(MONEY)
     note: Mapped[str] = mapped_column(Text)
+
+
+class Passkey(Base):
+    """Adam's passkeys (§10). Only the public key is stored."""
+
+    __tablename__ = "passkeys"
+
+    credential_id: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary)
+    sign_count: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(UTC_TIME)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTC_TIME)
+
+
+class AuthChallenge(Base):
+    """A WebAuthn challenge, usable once before it expires. ``purpose`` binds it to what it
+    may authorise (registration, login, or one action with its exact payload)."""
+
+    __tablename__ = "auth_challenges"
+
+    challenge: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(128))
+    expires_at: Mapped[datetime] = mapped_column(UTC_TIME)
+
+
+class AuthSession(Base):
+    """A login. Only the SHA-256 of the cookie token is stored."""
+
+    __tablename__ = "auth_sessions"
+
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(UTC_TIME)
+    expires_at: Mapped[datetime] = mapped_column(UTC_TIME)
