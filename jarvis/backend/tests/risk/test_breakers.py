@@ -94,6 +94,10 @@ def test_pause() -> None:
         (SystemHealth(True, 0, 1.01, True), Reason.CLOCK_DRIFT),
         (SystemHealth(True, 0, -1.5, True), Reason.CLOCK_DRIFT),
         (SystemHealth(True, 0, 0.0, False), Reason.NOT_RECONCILED),
+        (
+            SystemHealth(True, 0, 0.0, True, account_mode_matches=False),
+            Reason.ACCOUNT_MODE_MISMATCH,
+        ),
     ],
 )
 def test_unhealthy_system_halts_everything(health: SystemHealth, reason: Reason) -> None:
