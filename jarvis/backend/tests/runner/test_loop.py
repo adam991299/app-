@@ -368,7 +368,7 @@ async def test_a_setup_whose_costs_eat_the_result_is_not_sent(store: Store) -> N
     await approve(store, edge_r=0.5)
     market.history = bars_rising(date(2026, 11, 16))
     await runner.after_close(date(2026, 11, 16))
-    runner._costs = CostModel(commission_min=10_000.0)
+    runner._costs = CostModel(half_spread_bps=5_000.0)  # a 50 % spread
     sim.set_price("AAPL", D(105))
     market.prices["AAPL"] = D(105)
     await runner.enter_pending()
